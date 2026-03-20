@@ -215,9 +215,9 @@ const fallbackGeneratedProposalDraft = (
       : "Customer stack details should be confirmed during discovery.",
     input.company.certifications.length > 0 || input.company.standards.length > 0
       ? `Compliance references: ${[
-          ...input.company.certifications,
-          ...input.company.standards,
-        ].join(", ")}.`
+        ...input.company.certifications,
+        ...input.company.standards,
+      ].join(", ")}.`
       : "Compliance evidence and architecture controls should be included in the next draft.",
   ].join(" ");
 
@@ -247,7 +247,9 @@ const fallbackGeneratedProposalDraft = (
 };
 
 const buildProposalDraftPrompt = (input: RecommendationProposalInput) => {
-  return `You are preparing a revised RFP proposal draft based on an AI recommendation.
+  return `You are an expert enterprise solutions consultant preparing a high-quality RFP proposal draft based on an AI-generated recommendation.
+
+Your goal is to produce a concise, executive-ready proposal that is actionable, outcome-driven, and clearly justified.
 
 Return JSON only in this exact shape:
 {
@@ -258,14 +260,49 @@ Return JSON only in this exact shape:
   "rationale": "string"
 }
 
-Rules:
-- Keep each field concise and practical for a management audience.
-- Make title specific and outcome-focused.
-- Include risk mitigation and measurable outcome orientation.
-- Use only context provided below.
+DETAILED INSTRUCTIONS:
+
+- title:
+  - Make it specific, outcome-focused, and business-oriented.
+  - Clearly reflect the value or transformation (not generic wording).
+
+- summary:
+  - 3–5 sentences max.
+  - Clearly describe the proposed solution, expected business impact, and timeline or scope if implied.
+  - Include measurable outcomes (e.g., % cost reduction, efficiency gain, revenue impact) when possible.
+
+- intentSignals:
+  - Identify key signals from the context that justify why this proposal is relevant now.
+  - Reference business needs, pain points, constraints, or strategic priorities.
+  - Avoid generic statements—tie directly to the input.
+
+- technologyFit:
+  - Explain why the recommended technology or approach is appropriate.
+  - Include:
+    - Compatibility with current systems (if mentioned)
+    - Scalability and flexibility
+    - Implementation complexity level (low/medium/high)
+  - Highlight any assumptions clearly if data is incomplete.
+
+- rationale:
+  - Provide a structured justification including:
+    - Business value (ROI, efficiency, risk reduction, growth)
+    - Key trade-offs or alternatives (if implied)
+    - Risks and mitigation strategies
+  - Include at least 2 concrete risks and how they would be mitigated.
+  - Keep it practical and decision-oriented.
+
+GLOBAL RULES:
+- Be concise but complete—no fluff.
+- Prioritize clarity over technical jargon.
+- Use only the context provided below—do not invent facts.
+- If data is missing, make conservative assumptions and state them briefly.
+- Avoid repetition across fields.
+- Write in a tone suitable for senior management.
 
 CONTEXT:
-${JSON.stringify(input, null, 2)}`;
+${JSON.stringify(input, null, 2)}
+`;
 };
 
 export async function analyzeRfpProposalWithAI(

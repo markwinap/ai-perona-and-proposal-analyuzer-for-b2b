@@ -63,6 +63,7 @@ const buildProposalAnalysisTranslationSource = (input: {
 
 export function PersonaPortal() {
   const [messageApi, contextHolder] = message.useMessage();
+  const [modal, modalContextHolder] = Modal.useModal();
   const [showCreateCompany, setShowCreateCompany] = useState(false);
   const [showCreatePersona, setShowCreatePersona] = useState(false);
   const [showCreateProposal, setShowCreateProposal] = useState(false);
@@ -287,49 +288,49 @@ export function PersonaPortal() {
     stakeholderModalProposalId === null ? null : proposalById.get(stakeholderModalProposalId) ?? null;
 
   const closeCompanyEditor = () => {
-    if (!shouldCloseEditor(editCompanyForm.isFieldsTouched(), "Discard unsaved company changes?")) {
-      return;
-    }
+    // if (!shouldCloseEditor(editCompanyForm.isFieldsTouched(), "Discard unsaved company changes?")) {
+    //   return;
+    // }
     setEditingCompanyId(null);
     editCompanyForm.resetFields();
   };
 
   const closeCreateCompanyModal = () => {
-    if (!shouldCloseEditor(createCompanyForm.isFieldsTouched(), "Discard new company details?")) {
-      return;
-    }
+    // if (!shouldCloseEditor(createCompanyForm.isFieldsTouched(), "Discard new company details?")) {
+    //   return;
+    // }
     setShowCreateCompany(false);
     createCompanyForm.resetFields();
   };
 
   const closePersonaEditor = () => {
-    if (!shouldCloseEditor(editPersonaForm.isFieldsTouched(), "Discard unsaved persona changes?")) {
-      return;
-    }
+    // if (!shouldCloseEditor(editPersonaForm.isFieldsTouched(), "Discard unsaved persona changes?")) {
+    //   return;
+    // }
     setEditingPersonaId(null);
     editPersonaForm.resetFields();
   };
 
   const closeCreatePersonaModal = () => {
-    if (!shouldCloseEditor(createPersonaForm.isFieldsTouched(), "Discard new persona details?")) {
-      return;
-    }
+    // if (!shouldCloseEditor(createPersonaForm.isFieldsTouched(), "Discard new persona details?")) {
+    //   return;
+    // }
     setShowCreatePersona(false);
     createPersonaForm.resetFields();
   };
 
   const closeProposalEditor = () => {
-    if (!shouldCloseEditor(editProposalForm.isFieldsTouched(), "Discard unsaved proposal changes?")) {
-      return;
-    }
+    // if (!shouldCloseEditor(editProposalForm.isFieldsTouched(), "Discard unsaved proposal changes?")) {
+    //   return;
+    // }
     setEditingProposalId(null);
     editProposalForm.resetFields();
   };
 
   const closeCreateProposalModal = () => {
-    if (!shouldCloseEditor(createProposalForm.isFieldsTouched(), "Discard new proposal details?")) {
-      return;
-    }
+    // if (!shouldCloseEditor(createProposalForm.isFieldsTouched(), "Discard new proposal details?")) {
+    //   return;
+    // }
     setShowCreateProposal(false);
     createProposalForm.resetFields();
   };
@@ -341,9 +342,9 @@ export function PersonaPortal() {
   };
 
   const closeAddCommunicationModal = () => {
-    if (!shouldCloseEditor(communicationForm.isFieldsTouched(), "Discard new communication details?")) {
-      return;
-    }
+    // if (!shouldCloseEditor(communicationForm.isFieldsTouched(), "Discard new communication details?")) {
+    //   return;
+    // }
     setShowAddCommunicationModal(false);
     communicationForm.resetFields();
   };
@@ -408,6 +409,7 @@ export function PersonaPortal() {
   return (
     <div className="portal-shell">
       {contextHolder}
+      {modalContextHolder}
 
       <header className="hero-banner">
         <div className="hero-copy">
@@ -626,7 +628,7 @@ export function PersonaPortal() {
                         {
                           title: "Signals Snapshot",
                           render: (_, row) => (
-                            <Space direction="vertical" size={1}>
+                            <Space orientation="vertical" size={1}>
                               <Typography.Text>{shortText(row.intentSignals, 78)}</Typography.Text>
                               <Typography.Text type="secondary">
                                 Tech fit: {shortText(row.technologyFit, 64)}
@@ -646,7 +648,7 @@ export function PersonaPortal() {
                             }
 
                             return (
-                              <Space direction="vertical" size={1}>
+                              <Space orientation="vertical" size={1}>
                                 <Typography.Text>
                                   Success: <strong>{latestEvaluation.successScore}</strong>
                                 </Typography.Text>
@@ -682,7 +684,7 @@ export function PersonaPortal() {
                                 size="small"
                                 danger
                                 onClick={() => {
-                                  Modal.confirm({
+                                  modal.confirm({
                                     title: "Delete Proposal",
                                     content: `Are you sure you want to delete "${row.title}"? This action cannot be undone.`,
                                     okText: "Delete",
@@ -819,16 +821,16 @@ export function PersonaPortal() {
             </Col>
           </Row>
           <Form.Item name="jobDescription" label="Job Description">
-            <TextArea rows={2} placeholder="Role scope and accountability" />
+            <TextArea autoSize={{ minRows: 2 }} placeholder="Role scope and accountability" />
           </Form.Item>
           <Form.Item name="personalitySummary" label="Personality Summary">
-            <TextArea rows={2} placeholder="Analytical, risk-aware, collaborative" />
+            <TextArea autoSize={{ minRows: 2 }} placeholder="Analytical, risk-aware, collaborative" />
           </Form.Item>
           <Form.Item name="personalPreferences" label="Personal Preferences">
-            <TextArea rows={2} placeholder="Prefers concise briefs and architecture diagrams" />
+            <TextArea autoSize={{ minRows: 2 }} placeholder="Prefers concise briefs and architecture diagrams" />
           </Form.Item>
           <Form.Item name="pastExperiences" label="Past Experiences">
-            <TextArea rows={2} placeholder="Previous transformation projects and outcomes" />
+            <TextArea autoSize={{ minRows: 2 }} placeholder="Previous transformation projects and outcomes" />
           </Form.Item>
         </Form>
       </Modal>
@@ -868,13 +870,13 @@ export function PersonaPortal() {
             </Col>
           </Row>
           <Form.Item name="summary" label="Summary">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
           <Form.Item name="intentSignals" label="Intent Signals">
-            <TextArea rows={2} placeholder="Recent RFP, migration program, executive initiative" />
+            <TextArea autoSize={{ minRows: 2 }} placeholder="Recent RFP, migration program, executive initiative" />
           </Form.Item>
           <Form.Item name="technologyFit" label="Technology Fit">
-            <TextArea rows={2} placeholder="Stack and platform compatibility with customer constraints" />
+            <TextArea autoSize={{ minRows: 2 }} placeholder="Stack and platform compatibility with customer constraints" />
           </Form.Item>
         </Form>
       </Modal>
@@ -914,10 +916,10 @@ export function PersonaPortal() {
             </Col>
           </Row>
           <Form.Item name="businessIntent" label="Business Intent">
-            <TextArea rows={2} placeholder="Growth targets, priorities, strategic goals" />
+            <TextArea autoSize={{ minRows: 2 }} placeholder="Growth targets, priorities, strategic goals" />
           </Form.Item>
           <Form.Item name="technologyIntent" label="Technology Intent">
-            <TextArea rows={2} placeholder="Cloud modernization, AI adoption, data platform plans" />
+            <TextArea autoSize={{ minRows: 2 }} placeholder="Cloud modernization, AI adoption, data platform plans" />
           </Form.Item>
           <Form.Item name="developmentStacks" label="Development Stacks (comma separated)">
             <Input placeholder="Next.js, .NET, Azure Functions" />
@@ -984,10 +986,10 @@ export function PersonaPortal() {
             </Col>
           </Row>
           <Form.Item name="businessIntent" label="Business Intent">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
           <Form.Item name="technologyIntent" label="Technology Intent">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
           <Form.Item name="developmentStacks" label="Development Stacks (comma separated)">
             <Input />
@@ -1034,7 +1036,7 @@ export function PersonaPortal() {
         }}
       >
         {communicationModalPersona ? (
-          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
             <Typography.Text type="secondary">
               Company: {communicationModalPersona.company.name}
             </Typography.Text>
@@ -1166,16 +1168,16 @@ export function PersonaPortal() {
             </Col>
           </Row>
           <Form.Item name="jobDescription" label="Job Description">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
           <Form.Item name="personalitySummary" label="Personality Summary">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
           <Form.Item name="personalPreferences" label="Personal Preferences">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
           <Form.Item name="pastExperiences" label="Past Experiences">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
         </Form>
       </Modal>
@@ -1328,13 +1330,13 @@ export function PersonaPortal() {
             <Input />
           </Form.Item>
           <Form.Item name="summary" label="Summary">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
           <Form.Item name="intentSignals" label="Intent Signals">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
           <Form.Item name="technologyFit" label="Technology Fit">
-            <TextArea rows={2} />
+            <TextArea autoSize={{ minRows: 2 }} />
           </Form.Item>
         </Form>
       </Modal>
@@ -1433,7 +1435,7 @@ export function PersonaPortal() {
           xxl: '40%',
         }}      >
         {rfpModalProposal ? (
-          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
             <Typography.Text type="secondary">Company: {rfpModalProposal.company.name}</Typography.Text>
             <Dropdown
               trigger={["click"]}
@@ -1502,7 +1504,7 @@ export function PersonaPortal() {
                   )}
                   expandable={{
                     expandedRowRender: (row) => (
-                      <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                      <Space orientation="vertical" size="small" style={{ width: "100%" }}>
                         <Space.Compact size="small">
                           <Button
                             size="small"
@@ -1594,7 +1596,7 @@ export function PersonaPortal() {
                     {
                       title: "Recommendation",
                       render: (_, row) => (
-                        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                        <Space orientation="vertical" size={4} style={{ width: "100%" }}>
                           <Typography.Text>{recommendationPreview(row.recommendation)}</Typography.Text>
                           <Button
                             size="small"
@@ -1657,10 +1659,10 @@ export function PersonaPortal() {
             }
           >
             <Form.Item name="successSignals" label="Success Signals">
-              <TextArea rows={2} placeholder="Budget approval, architectural sponsorship" />
+              <TextArea autoSize={{ minRows: 2 }} placeholder="Budget approval, architectural sponsorship" />
             </Form.Item>
             <Form.Item name="failureSignals" label="Failure Signals">
-              <TextArea rows={2} placeholder="Compliance blockers, timeline mismatch" />
+              <TextArea autoSize={{ minRows: 2 }} placeholder="Compliance blockers, timeline mismatch" />
             </Form.Item>
             <Row gutter={12}>
               <Col xs={24} md={12}>
@@ -1685,7 +1687,7 @@ export function PersonaPortal() {
               </Col>
             </Row>
             <Form.Item name="recommendation" label="Recommendation">
-              <TextArea rows={2} placeholder="Lead with phased implementation and compliance evidence" />
+              <TextArea autoSize={{ minRows: 2 }} placeholder="Lead with phased implementation and compliance evidence" />
             </Form.Item>
           </Form>
         ) : null}
