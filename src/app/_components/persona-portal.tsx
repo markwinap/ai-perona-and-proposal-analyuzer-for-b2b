@@ -7,6 +7,7 @@ import {
   Card,
   Col,
   Divider,
+  Dropdown,
   Flex,
   Form,
   Grid,
@@ -1215,7 +1216,6 @@ export function PersonaPortal() {
             <Space.Compact key="persona-view-toggle">
               <Button
                 type={personaAnalysisViewMode === "original" ? "primary" : "default"}
-                disabled={personaAnalysisViewMode === "original"}
                 onClick={() => setPersonaAnalysisViewMode("original")}
               >
                 Show Original
@@ -1435,81 +1435,58 @@ export function PersonaPortal() {
         {rfpModalProposal ? (
           <Space direction="vertical" size="middle" style={{ width: "100%" }}>
             <Typography.Text type="secondary">Company: {rfpModalProposal.company.name}</Typography.Text>
-            <Space size="small" wrap>
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "run-analysis",
+                    label: "Run AI RFP Analysis",
+                  },
+                  {
+                    key: "generate-latest",
+                    label: "Generate New Proposal From Latest Recommendation",
+                    disabled:
+                      !latestRfpEvaluation?.recommendation ||
+                      (generateRfpProposalMutation.isPending && generatingFromEvaluationId === latestRfpEvaluation?.id),
+                  },
+                  {
+                    key: "manual-evaluation",
+                    label: "Add Manual Evaluation",
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === "run-analysis") {
+                    analyzeRfpMutation.mutate({ proposalId: rfpModalProposal.id });
+                    return;
+                  }
+
+                  if (key === "generate-latest") {
+                    if (!latestRfpEvaluation) return;
+                    setGeneratingFromEvaluationId(latestRfpEvaluation.id);
+                    generateRfpProposalMutation.mutate(
+                      { proposalId: rfpModalProposal.id, evaluationId: latestRfpEvaluation.id },
+                      { onSettled: () => setGeneratingFromEvaluationId(null) }
+                    );
+                    return;
+                  }
+
+                  if (key === "manual-evaluation") {
+                    setShowManualEvaluation(true);
+                  }
+                },
+              }}
+            >
               <Button
                 type="primary"
-                loading={analyzeRfpMutation.isPending}
-                onClick={() => analyzeRfpMutation.mutate({ proposalId: rfpModalProposal.id })}
+                loading={
+                  analyzeRfpMutation.isPending ||
+                  (generateRfpProposalMutation.isPending && generatingFromEvaluationId === latestRfpEvaluation?.id)
+                }
               >
-                Run AI RFP Analysis
+                Actions
               </Button>
-              <Button
-                loading={generateRfpProposalMutation.isPending && generatingFromEvaluationId === latestRfpEvaluation?.id}
-                disabled={!latestRfpEvaluation?.recommendation}
-                onClick={() => {
-                  if (!latestRfpEvaluation) return;
-                  setGeneratingFromEvaluationId(latestRfpEvaluation.id);
-                  generateRfpProposalMutation.mutate(
-                    { proposalId: rfpModalProposal.id, evaluationId: latestRfpEvaluation.id },
-                    { onSettled: () => setGeneratingFromEvaluationId(null) }
-                  );
-                }}
-              >
-                Generate New Proposal From Latest Recommendation
-              </Button>
-              <Button
-                onClick={() => setShowManualEvaluation((v) => !v)}
-              >
-                {showManualEvaluation ? "Cancel Manual Evaluation" : "Add Manual Evaluation"}
-              </Button>
-            </Space>
-
-            {showManualEvaluation ? (
-              <Card size="small" title="Manual Evaluation">
-                <Form
-                  form={evaluationForm}
-                  layout="vertical"
-                  onFinish={(values) =>
-                    evaluationMutation.mutate({ proposalId: rfpModalProposal.id, ...values })
-                  }
-                >
-                  <Form.Item name="successSignals" label="Success Signals">
-                    <TextArea rows={2} placeholder="Budget approval, architectural sponsorship" />
-                  </Form.Item>
-                  <Form.Item name="failureSignals" label="Failure Signals">
-                    <TextArea rows={2} placeholder="Compliance blockers, timeline mismatch" />
-                  </Form.Item>
-                  <Row gutter={12}>
-                    <Col xs={24} md={12}>
-                      <Form.Item
-                        name="successScore"
-                        label="Success Score (0-100)"
-                        initialValue={65}
-                        rules={[{ required: true }]}
-                      >
-                        <InputNumber min={0} max={100} style={{ width: "100%" }} />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <Form.Item
-                        name="failureRiskScore"
-                        label="Failure Risk Score (0-100)"
-                        initialValue={35}
-                        rules={[{ required: true }]}
-                      >
-                        <InputNumber min={0} max={100} style={{ width: "100%" }} />
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                  <Form.Item name="recommendation" label="Recommendation">
-                    <TextArea rows={2} placeholder="Lead with phased implementation and compliance evidence" />
-                  </Form.Item>
-                  <Button type="primary" htmlType="submit" loading={evaluationMutation.isPending}>
-                    Save Evaluation
-                  </Button>
-                </Form>
-              </Card>
-            ) : null}
+            </Dropdown>
 
             {rfpModalProposal.evaluations.length > 0 ? (
               <>
@@ -1530,7 +1507,6 @@ export function PersonaPortal() {
                           <Button
                             size="small"
                             type={proposalAnalysisViewModes[row.id] === "original" ? "primary" : "default"}
-                            disabled={proposalAnalysisViewModes[row.id] === "original"}
                             onClick={() =>
                               setProposalAnalysisViewModes((current) => ({
                                 ...current,
@@ -1652,6 +1628,66 @@ export function PersonaPortal() {
               </Typography.Text>
             )}
           </Space>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={showManualEvaluation && rfpModalProposal !== null}
+        title={rfpModalProposal ? `Manual Evaluation: ${rfpModalProposal.title}` : "Manual Evaluation"}
+        onCancel={() => setShowManualEvaluation(false)}
+        onOk={() => evaluationForm.submit()}
+        okText="Save Evaluation"
+        confirmLoading={evaluationMutation.isPending}
+        centered
+        width={{
+          xs: '90%',
+          sm: '80%',
+          md: '70%',
+          lg: '60%',
+          xl: '40%',
+          xxl: '40%',
+        }}
+      >
+        {rfpModalProposal ? (
+          <Form
+            form={evaluationForm}
+            layout="vertical"
+            onFinish={(values) =>
+              evaluationMutation.mutate({ proposalId: rfpModalProposal.id, ...values })
+            }
+          >
+            <Form.Item name="successSignals" label="Success Signals">
+              <TextArea rows={2} placeholder="Budget approval, architectural sponsorship" />
+            </Form.Item>
+            <Form.Item name="failureSignals" label="Failure Signals">
+              <TextArea rows={2} placeholder="Compliance blockers, timeline mismatch" />
+            </Form.Item>
+            <Row gutter={12}>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="successScore"
+                  label="Success Score (0-100)"
+                  initialValue={65}
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber min={0} max={100} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="failureRiskScore"
+                  label="Failure Risk Score (0-100)"
+                  initialValue={35}
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber min={0} max={100} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item name="recommendation" label="Recommendation">
+              <TextArea rows={2} placeholder="Lead with phased implementation and compliance evidence" />
+            </Form.Item>
+          </Form>
         ) : null}
       </Modal>
 
