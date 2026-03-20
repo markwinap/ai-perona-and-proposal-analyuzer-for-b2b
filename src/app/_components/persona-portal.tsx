@@ -65,6 +65,7 @@ export function PersonaPortal() {
   const [showCreateCompany, setShowCreateCompany] = useState(false);
   const [showCreatePersona, setShowCreatePersona] = useState(false);
   const [showCreateProposal, setShowCreateProposal] = useState(false);
+  const [showAddCommunicationModal, setShowAddCommunicationModal] = useState(false);
   const [editingCompanyId, setEditingCompanyId] = useState<number | null>(null);
   const [editingPersonaId, setEditingPersonaId] = useState<number | null>(null);
   const [editingProposalId, setEditingProposalId] = useState<number | null>(null);
@@ -143,7 +144,7 @@ export function PersonaPortal() {
     onSuccess: async () => {
       await utils.persona.listCommunications.invalidate();
       communicationForm.resetFields();
-      setCommunicationModalPersonaId(null);
+      setShowAddCommunicationModal(false);
       messageApi.success("Communication record added");
     },
     onError: (error) => messageApi.error(error.message),
@@ -261,6 +262,15 @@ export function PersonaPortal() {
     communicationModalPersonaId === null
       ? null
       : personas.find((persona) => persona.id === communicationModalPersonaId) ?? null;
+  const personaCommunications = useMemo(() => {
+    if (communicationModalPersonaId === null) {
+      return [];
+    }
+
+    return (communicationsQuery.data ?? []).filter(
+      (communication) => communication.persona.id === communicationModalPersonaId
+    );
+  }, [communicationsQuery.data, communicationModalPersonaId]);
   const analyzePersonaModalPersona =
     analyzePersonaModalId === null
       ? null
@@ -324,10 +334,16 @@ export function PersonaPortal() {
   };
 
   const closeCommunicationModal = () => {
+    setShowAddCommunicationModal(false);
+    setCommunicationModalPersonaId(null);
+    communicationForm.resetFields();
+  };
+
+  const closeAddCommunicationModal = () => {
     if (!shouldCloseEditor(communicationForm.isFieldsTouched(), "Discard new communication details?")) {
       return;
     }
-    setCommunicationModalPersonaId(null);
+    setShowAddCommunicationModal(false);
     communicationForm.resetFields();
   };
 
@@ -539,7 +555,7 @@ export function PersonaPortal() {
                                 Edit
                               </Button>
                               <Button size="small" onClick={() => setCommunicationModalPersonaId(row.id)}>
-                                Add Communication
+                                Communications
                               </Button>
                               <Button size="small" type="primary" onClick={() => setAnalyzePersonaModalId(row.id)}>
                                 Analyze
@@ -550,36 +566,6 @@ export function PersonaPortal() {
                       ]}
                     />
                   </Card>
-
-                  <Card title="Communications" className="data-card">
-                    <Table
-                      className="portal-table"
-                      rowKey="id"
-                      size="middle"
-                      pagination={{ pageSize: TABLE_PAGE_SIZE }}
-                      dataSource={communicationsQuery.data ?? []}
-                      columns={[
-                        {
-                          title: "Persona",
-                          render: (_, row) => row.persona.fullName,
-                        },
-                        {
-                          title: "Company",
-                          render: (_, row) => row.company.name,
-                        },
-                        {
-                          title: "Type",
-                          render: (_, row) => <Tag>{row.type}</Tag>,
-                        },
-                        { title: "Subject", dataIndex: "subject" },
-                        {
-                          title: "Excerpt",
-                          render: (_, row) => row.content.slice(0, 120),
-                        },
-                      ]}
-                    />
-                  </Card>
-
 
                 </Space>
               ),
@@ -1027,10 +1013,70 @@ export function PersonaPortal() {
         open={communicationModalPersona !== null}
         title={
           communicationModalPersona
+            ? `Communications: ${communicationModalPersona.fullName}`
+            : "Communications"
+        }
+        onCancel={closeCommunicationModal}
+        footer={
+          <Button onClick={closeCommunicationModal}>
+            Close
+          </Button>
+        }
+        centered
+        width={{
+          xs: '90%',
+          sm: '80%',
+          md: '70%',
+          lg: '60%',
+          xl: '40%',
+          xxl: '40%',
+        }}
+      >
+        {communicationModalPersona ? (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            <Typography.Text type="secondary">
+              Company: {communicationModalPersona.company.name}
+            </Typography.Text>
+
+            <Flex justify="end">
+              <Button type="primary" onClick={() => setShowAddCommunicationModal(true)}>
+                Add Communication
+              </Button>
+            </Flex>
+
+            <Card title="Communication History" size="small">
+              <Table
+                className="portal-table"
+                rowKey="id"
+                size="middle"
+                pagination={{ pageSize: TABLE_PAGE_SIZE }}
+                loading={communicationsQuery.isLoading}
+                dataSource={personaCommunications}
+                columns={[
+                  {
+                    title: "Type",
+                    render: (_, row) => <Tag>{row.type}</Tag>,
+                  },
+                  { title: "Subject", dataIndex: "subject" },
+                  {
+                    title: "Excerpt",
+                    render: (_, row) => row.content.slice(0, 120),
+                  },
+                ]}
+              />
+            </Card>
+          </Space>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={communicationModalPersona !== null && showAddCommunicationModal}
+        title={
+          communicationModalPersona
             ? `Add Communication: ${communicationModalPersona.fullName}`
             : "Add Communication"
         }
-        onCancel={closeCommunicationModal}
+        onCancel={closeAddCommunicationModal}
         onOk={() => communicationForm.submit()}
         okText="Save Communication"
         confirmLoading={communicationMutation.isPending}

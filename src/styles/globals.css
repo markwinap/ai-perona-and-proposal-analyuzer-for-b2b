@@ -11,6 +11,12 @@
   --line: rgba(148, 163, 184, 0.24);
   --accent: #144a6c;
   --accent-strong: #0f3550;
+  --btn-primary-start: #23a6d5;
+  --btn-primary-end: #1e3a8a;
+  --btn-primary-hover-start: #35b4df;
+  --btn-primary-hover-end: #2443a0;
+  --btn-primary-active-start: #1f8fba;
+  --btn-primary-active-end: #19327d;
   --shadow-lg: 0 24px 70px rgba(15, 23, 42, 0.10);
   --shadow-md: 0 14px 32px rgba(15, 23, 42, 0.08);
 }
@@ -383,11 +389,38 @@ a {
 }
 
 .ant-btn-primary {
-  background: linear-gradient(180deg, #1c5a80, #144a6c);
+  border-color: transparent !important;
+  background: linear-gradient(135deg, var(--btn-primary-start), var(--btn-primary-end)) !important;
+  box-shadow: 0 10px 24px rgba(30, 58, 138, 0.26);
 }
 
 .ant-btn-primary:hover {
-  background: linear-gradient(180deg, #22658f, #175377);
+  border-color: transparent !important;
+  background: linear-gradient(135deg, var(--btn-primary-hover-start), var(--btn-primary-hover-end)) !important;
+  box-shadow: 0 12px 28px rgba(30, 58, 138, 0.3);
+  transform: translateY(-1px);
+}
+
+.ant-btn-primary:active {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, var(--btn-primary-active-start), var(--btn-primary-active-end)) !important;
+  box-shadow: 0 6px 16px rgba(30, 58, 138, 0.22);
+  transform: translateY(0);
+}
+
+.ant-btn-primary:focus-visible {
+  border-color: transparent !important;
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.8),
+    0 0 0 6px rgba(35, 166, 213, 0.45),
+    0 12px 28px rgba(30, 58, 138, 0.3);
+}
+
+.ant-btn-primary.ant-btn-background-ghost {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  background: linear-gradient(135deg, rgba(35, 166, 213, 0.4), rgba(30, 58, 138, 0.5)) !important;
 }
 
 .ant-btn-default,
