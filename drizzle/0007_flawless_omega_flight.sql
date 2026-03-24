@@ -1,0 +1,2 @@
+ALTER TABLE "persona_analizer_ts_proposal_meeting" ADD COLUMN "meetingAnalysis" text;--> statement-breakpoint
+ALTER TABLE "persona_analizer_ts_proposal_meeting" ADD COLUMN "analysisGeneratedAt" timestamp with time zone;

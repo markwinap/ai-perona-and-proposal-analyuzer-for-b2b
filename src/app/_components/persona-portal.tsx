@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Button,
@@ -9,6 +9,7 @@ import {
   Col,
   Divider,
   Dropdown,
+  Empty,
   Flex,
   Form,
   Grid,
@@ -25,6 +26,7 @@ import {
   Typography,
   message,
 } from "antd";
+import { SendOutlined } from "@ant-design/icons";
 
 import {
   COMMUNICATION_TYPE_OPTIONS,
@@ -40,6 +42,7 @@ import {
   shouldCloseEditor,
 } from "./persona-portal.helpers";
 import { SearchSelect } from "./search-select";
+import { ProposalMeetingNotes } from "~/app/_components/proposal-meeting-notes";
 import { ThemeToggle } from "~/app/theme-toggle";
 import { api } from "~/trpc/react";
 import Link from "next/link";
@@ -80,8 +83,12 @@ export function PersonaPortal() {
   const [stakeholderModalProposalId, setStakeholderModalProposalId] = useState<number | null>(null);
   const [chatModalProposalId, setChatModalProposalId] = useState<number | null>(null);
   const [chatDraft, setChatDraft] = useState("");
+  const [proposalDetailsModalId, setProposalDetailsModalId] = useState<number | null>(null);
+  const [generateCommModalProposalId, setGenerateCommModalProposalId] = useState<number | null>(null);
   const [showManualEvaluation, setShowManualEvaluation] = useState(false);
-  const [showGenerateComm, setShowGenerateComm] = useState(false);
+  const [selectedGeneratedCommunicationId, setSelectedGeneratedCommunicationId] = useState<number | null>(null);
+  const [generatedCommunicationDraft, setGeneratedCommunicationDraft] = useState("");
+  const [generateCommFormVersion, setGenerateCommFormVersion] = useState(0);
   const [generatingFromEvaluationId, setGeneratingFromEvaluationId] = useState<number | null>(null);
   const [personaAnalysisTranslation, setPersonaAnalysisTranslation] = useState<string | null>(null);
   const [personaAnalysisViewMode, setPersonaAnalysisViewMode] = useState<"original" | "translated">("original");
@@ -97,17 +104,20 @@ export function PersonaPortal() {
   const [editPersonaForm] = Form.useForm();
   const [editProposalForm] = Form.useForm();
   const [evaluationForm] = Form.useForm();
-  const [generateCommForm] = Form.useForm();
   const [communicationForm] = Form.useForm();
   const [stakeholderForm] = Form.useForm();
   const utils = api.useUtils();
   const screens = useBreakpoint();
+  const chatLastMessageRef = useRef<HTMLDivElement | null>(null);
 
   const companiesQuery = api.company.list.useQuery();
   const personasQuery = api.persona.list.useQuery();
   const communicationsQuery = api.persona.listCommunications.useQuery();
   const proposalsQuery = api.proposal.list.useQuery();
-  const generatedMessagesQuery = api.proposal.listGeneratedCommunications.useQuery();
+  const generatedMessagesQuery = api.proposal.listGeneratedCommunications.useQuery(
+    generateCommModalProposalId !== null ? { proposalId: generateCommModalProposalId } : undefined,
+    { enabled: generateCommModalProposalId !== null }
+  );
   const proposalChatQuery = api.proposal.getChatSession.useQuery(
     { proposalId: chatModalProposalId ?? 1 },
     { enabled: chatModalProposalId !== null }
@@ -215,11 +225,43 @@ export function PersonaPortal() {
   });
 
   const generationMutation = api.proposal.generateCommunicationTarget.useMutation({
+    onSuccess: async (result) => {
+      await utils.proposal.listGeneratedCommunications.invalidate();
+      setGenerateCommFormVersion((current) => current + 1);
+      if (result) {
+        setSelectedGeneratedCommunicationId(result.id);
+      }
+      messageApi.success("Communication target generated");
+    },
+    onError: (error) => messageApi.error(error.message),
+  });
+
+  const updateGeneratedCommunicationMutation = api.proposal.updateGeneratedCommunication.useMutation({
     onSuccess: async () => {
       await utils.proposal.listGeneratedCommunications.invalidate();
-      generateCommForm.resetFields();
-      setShowGenerateComm(false);
-      messageApi.success("Communication target generated");
+      messageApi.success("Generated communication saved");
+    },
+    onError: (error) => messageApi.error(error.message),
+  });
+
+  const duplicateGeneratedCommunicationMutation = api.proposal.duplicateGeneratedCommunication.useMutation({
+    onSuccess: async (result) => {
+      await utils.proposal.listGeneratedCommunications.invalidate();
+      if (result) {
+        setSelectedGeneratedCommunicationId(result.id);
+      }
+      messageApi.success("Generated communication duplicated");
+    },
+    onError: (error) => messageApi.error(error.message),
+  });
+
+  const deleteGeneratedCommunicationMutation = api.proposal.deleteGeneratedCommunication.useMutation({
+    onSuccess: async (_, input) => {
+      await utils.proposal.listGeneratedCommunications.invalidate();
+      if (selectedGeneratedCommunicationId === input.generatedCommunicationId) {
+        setSelectedGeneratedCommunicationId(null);
+      }
+      messageApi.success("Generated communication deleted");
     },
     onError: (error) => messageApi.error(error.message),
   });
@@ -322,6 +364,55 @@ export function PersonaPortal() {
     stakeholderModalProposalId === null ? null : proposalById.get(stakeholderModalProposalId) ?? null;
   const chatModalProposal =
     chatModalProposalId === null ? null : proposalById.get(chatModalProposalId) ?? null;
+  const chatMessages = proposalChatQuery.data?.messages ?? [];
+  const proposalDetailsModalProposal =
+    proposalDetailsModalId === null ? null : proposalById.get(proposalDetailsModalId) ?? null;
+  const generateCommModalProposal =
+    generateCommModalProposalId === null ? null : proposalById.get(generateCommModalProposalId) ?? null;
+  const proposalGeneratedMessages = generatedMessagesQuery.data ?? [];
+  const selectedGeneratedCommunication =
+    selectedGeneratedCommunicationId === null
+      ? null
+      : proposalGeneratedMessages.find((item) => item.id === selectedGeneratedCommunicationId) ?? null;
+
+  useEffect(() => {
+    if (generateCommModalProposalId === null) {
+      setSelectedGeneratedCommunicationId(null);
+      setGeneratedCommunicationDraft("");
+    }
+  }, [generateCommModalProposalId]);
+
+  useEffect(() => {
+    if (proposalGeneratedMessages.length === 0) {
+      setSelectedGeneratedCommunicationId(null);
+      setGeneratedCommunicationDraft("");
+      return;
+    }
+
+    const hasSelectedCommunication = proposalGeneratedMessages.some(
+      (item) => item.id === selectedGeneratedCommunicationId
+    );
+
+    if (!hasSelectedCommunication) {
+      setSelectedGeneratedCommunicationId(proposalGeneratedMessages[0]?.id ?? null);
+    }
+  }, [proposalGeneratedMessages, selectedGeneratedCommunicationId]);
+
+  useEffect(() => {
+    setGeneratedCommunicationDraft(selectedGeneratedCommunication?.generatedMessage ?? "");
+  }, [selectedGeneratedCommunication]);
+
+  useEffect(() => {
+    if (chatModalProposalId === null || chatMessages.length === 0) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      chatLastMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [chatMessages, chatModalProposalId]);
 
   const closeCompanyEditor = () => {
     // if (!shouldCloseEditor(editCompanyForm.isFieldsTouched(), "Discard unsaved company changes?")) {
@@ -709,33 +800,41 @@ export function PersonaPortal() {
                         },
                         {
                           title: "Actions",
-                          render: (_, row) => (
-                            <Space size="small">
-                              <Button size="small" onClick={() => openProposalEditor(row)}>
-                                Edit
-                              </Button>
-                              <Button size="small" onClick={() => setStakeholderModalProposalId(row.id)}>
-                                Link Stakeholder
-                              </Button>
-                              <Button
-                                size="small"
-                                type="default"
-                                onClick={() => setRfpAnalysisModalProposalId(row.id)}
-                              >
-                                AI Analysis
-                              </Button>
-                              <Button
-                                size="small"
-                                type="primary"
-                                ghost
-                                onClick={() => setChatModalProposalId(row.id)}
-                              >
-                                Chat
-                              </Button>
-                              <Button
-                                size="small"
-                                danger
-                                onClick={() => {
+                          render: (_, row) => {
+                            const actionMenuItems = [
+                              {
+                                key: "link-stakeholder",
+                                label: "Link Stakeholder",
+                                onClick: () => setStakeholderModalProposalId(row.id),
+                              },
+                              {
+                                key: "ai-analysis",
+                                label: "AI Analysis",
+                                onClick: () => setRfpAnalysisModalProposalId(row.id),
+                              },
+                              {
+                                key: "chat",
+                                label: "Chat",
+                                onClick: () => setChatModalProposalId(row.id),
+                              },
+                              {
+                                key: "notes",
+                                label: "Notes",
+                                onClick: () => setProposalDetailsModalId(row.id),
+                              },
+                              {
+                                key: "generate-comm",
+                                label: "Communications",
+                                onClick: () => {
+                                  setGenerateCommModalProposalId(row.id);
+                                },
+                              },
+                              { type: "divider" as const },
+                              {
+                                key: "delete",
+                                label: "Delete",
+                                danger: true,
+                                onClick: () => {
                                   modal.confirm({
                                     title: "Delete Proposal",
                                     content: `Are you sure you want to delete "${row.title}"? This action cannot be undone.`,
@@ -746,82 +845,25 @@ export function PersonaPortal() {
                                       deleteProposalMutation.mutate({ proposalId: row.id });
                                     },
                                   });
-                                }}
-                                loading={deleteProposalMutation.isPending}
-                              >
-                                Delete
-                              </Button>
-                            </Space>
-                          ),
-                        },
-                      ]}
-                    />
-                  </Card>
+                                },
+                              },
+                            ];
 
-                  <Card
-                    className="data-card"
-                    title="Generated Communications"
-                    extra={
-                      <Button
-                        type="default"
-                        size="small"
-                        onClick={() => setShowGenerateComm((v) => !v)}
-                      >
-                        {showGenerateComm ? "Cancel" : "Generate Communication"}
-                      </Button>
-                    }
-                  >
-                    {showGenerateComm ? (
-                      <Form
-                        form={generateCommForm}
-                        layout="vertical"
-                        onFinish={(values) => generationMutation.mutate(values)}
-                        style={{ marginBottom: 16 }}
-                      >
-                        <Row gutter={12}>
-                          <Col xs={24} md={8}>
-                            <Form.Item name="proposalId" label="Proposal" rules={[{ required: true }]}>
-                              <SearchSelect options={proposalOptions} />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} md={8}>
-                            <Form.Item name="stakeholderRole" label="Role" rules={[{ required: true }]}>
-                              <Select options={STAKEHOLDER_ROLE_OPTIONS} />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} md={8}>
-                            <Form.Item name="personaId" label="Persona (optional)">
-                              <SearchSelect allowClear options={personaOptions} />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-                        <Button type="primary" htmlType="submit" loading={generationMutation.isPending}>
-                          Generate Message
-                        </Button>
-                      </Form>
-                    ) : null}
-                    <Table
-                      className="portal-table"
-                      rowKey="id"
-                      size="middle"
-                      pagination={{ pageSize: TABLE_PAGE_SIZE }}
-                      dataSource={generatedMessagesQuery.data ?? []}
-                      columns={[
-                        {
-                          title: "Proposal",
-                          render: (_, row) => row.proposal.title,
-                        },
-                        {
-                          title: "Role",
-                          dataIndex: "stakeholderRole",
-                        },
-                        {
-                          title: "Generation",
-                          render: () => <Tag>AI-assisted</Tag>,
-                        },
-                        {
-                          title: "Message",
-                          render: (_, row) => row.generatedMessage.slice(0, 140),
+                            return (
+                              <Space size="small">
+                                <Button size="small" onClick={() => openProposalEditor(row)}>
+                                  Edit
+                                </Button>
+                                <Dropdown
+                                  menu={{ items: actionMenuItems as any }}
+                                  placement="bottomRight"
+                                  trigger={["click"]}
+                                >
+                                  <Button size="small">More</Button>
+                                </Dropdown>
+                              </Space>
+                            );
+                          },
                         },
                       ]}
                     />
@@ -1753,7 +1795,31 @@ export function PersonaPortal() {
           setChatDraft("");
         }}
         footer={
-          <Flex justify="end" style={{ width: "100%" }}>
+          <Flex justify="end" gap="small" style={{ width: "100%" }}>
+            <Button
+              danger
+              type="text"
+              loading={resetChatHistoryMutation.isPending}
+              disabled={chatModalProposalId === null}
+              onClick={() => {
+                if (chatModalProposalId === null) {
+                  return;
+                }
+
+                modal.confirm({
+                  title: "Delete chat history?",
+                  content: "This will clear all messages and restart from the default context.",
+                  okText: "Delete & Restart",
+                  okType: "danger",
+                  cancelText: "Cancel",
+                  onOk() {
+                    resetChatHistoryMutation.mutate({ proposalId: chatModalProposalId });
+                  },
+                });
+              }}
+            >
+              Delete History & Restart
+            </Button>
             <Button
               onClick={() => {
                 setChatModalProposalId(null);
@@ -1776,36 +1842,6 @@ export function PersonaPortal() {
       >
         {chatModalProposalId !== null ? (
           <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
-            <Flex justify="space-between" align="center" wrap gap="small">
-              <Typography.Text type="secondary">
-                Resume this conversation anytime. Messages are stored in the database for this proposal.
-              </Typography.Text>
-              <Button
-                danger
-                type="text"
-                loading={resetChatHistoryMutation.isPending}
-                disabled={chatModalProposalId === null}
-                onClick={() => {
-                  if (chatModalProposalId === null) {
-                    return;
-                  }
-
-                  modal.confirm({
-                    title: "Delete chat history?",
-                    content: "This will clear all messages and restart from the default context.",
-                    okText: "Delete & Restart",
-                    okType: "danger",
-                    cancelText: "Cancel",
-                    onOk() {
-                      resetChatHistoryMutation.mutate({ proposalId: chatModalProposalId });
-                    },
-                  });
-                }}
-              >
-                Delete History & Restart
-              </Button>
-            </Flex>
-
             <Collapse
               items={[
                 {
@@ -1823,25 +1859,32 @@ export function PersonaPortal() {
             <Card size="small" title="Conversation">
               {proposalChatQuery.isLoading ? (
                 <Typography.Text type="secondary">Loading chat history...</Typography.Text>
-              ) : (proposalChatQuery.data?.messages.length ?? 0) === 0 ? (
+              ) : chatMessages.length === 0 ? (
                 <Typography.Text type="secondary">
                   No chat history yet. Ask a question to start from the default context.
                 </Typography.Text>
               ) : (
-                <Space orientation="vertical" size="small" style={{ width: "100%" }}>
-                  {(proposalChatQuery.data?.messages ?? []).map((msg) => (
-                    <Card key={msg.id} size="small" type="inner">
-                      <Space orientation="vertical" size={4} style={{ width: "100%" }}>
-                        <Tag color={msg.role === "assistant" ? "blue" : "green"}>
-                          {msg.role === "assistant" ? "Assistant" : "You"}
-                        </Tag>
-                        <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
-                          {msg.content}
-                        </Typography.Paragraph>
-                      </Space>
-                    </Card>
-                  ))}
-                </Space>
+                <div style={{ maxHeight: 420, overflowY: "auto", paddingRight: 4 }}>
+                  <Space orientation="vertical" size="small" style={{ width: "100%" }}>
+                    {chatMessages.map((msg, index) => (
+                      <div
+                        key={msg.id}
+                        ref={index === chatMessages.length - 1 ? chatLastMessageRef : undefined}
+                      >
+                        <Card size="small" type="inner">
+                          <Space orientation="vertical" size={4} style={{ width: "100%" }}>
+                            <Tag color={msg.role === "assistant" ? "blue" : "green"}>
+                              {msg.role === "assistant" ? "Assistant" : "You"}
+                            </Tag>
+                            <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
+                              {msg.content}
+                            </Typography.Paragraph>
+                          </Space>
+                        </Card>
+                      </div>
+                    ))}
+                  </Space>
+                </div>
               )}
             </Card>
 
@@ -1862,47 +1905,260 @@ export function PersonaPortal() {
                 label="Message"
                 extra={<Typography.Text type="secondary">Press Enter to send. Use Shift+Enter for a newline.</Typography.Text>}
               >
-                <TextArea
-                  value={chatDraft}
-                  onChange={(event) => setChatDraft(event.target.value)}
-                  onPressEnter={(event) => {
-                    if (event.shiftKey) {
-                      return;
-                    }
+                <Flex align="end" gap="small">
+                  <TextArea
+                    value={chatDraft}
+                    onChange={(event) => setChatDraft(event.target.value)}
+                    onPressEnter={(event) => {
+                      if (event.shiftKey) {
+                        return;
+                      }
 
-                    event.preventDefault();
+                      event.preventDefault();
 
-                    if (
-                      chatModalProposalId === null ||
-                      !chatDraft.trim() ||
-                      sendChatMessageMutation.isPending
-                    ) {
-                      return;
-                    }
+                      if (
+                        chatModalProposalId === null ||
+                        !chatDraft.trim() ||
+                        sendChatMessageMutation.isPending
+                      ) {
+                        return;
+                      }
 
-                    sendChatMessageMutation.mutate({
-                      proposalId: chatModalProposalId,
-                      message: chatDraft.trim(),
-                    });
-                  }}
-                  rows={3}
-                  placeholder="Ask about strategy, stakeholder-specific talking points, risk handling, or proposal positioning..."
-                />
+                      sendChatMessageMutation.mutate({
+                        proposalId: chatModalProposalId,
+                        message: chatDraft.trim(),
+                      });
+                    }}
+                    autoSize={{ minRows: 1, maxRows: 6 }}
+                    style={{ flex: 1 }}
+                    disabled={sendChatMessageMutation.isPending}
+                    placeholder="Ask about strategy, stakeholder-specific talking points, risk handling, or proposal positioning..."
+                  />
+                  <Button
+                    htmlType="submit"
+                    type="primary"
+                    icon={<SendOutlined />}
+                    aria-label="Send message"
+                    loading={sendChatMessageMutation.isPending}
+                    disabled={chatModalProposalId === null || !chatDraft.trim()}
+                  />
+                </Flex>
               </Form.Item>
-              <Flex justify="end">
-                <Button
-                  htmlType="submit"
-                  type="primary"
-                  size="large"
-                  loading={sendChatMessageMutation.isPending}
-                  disabled={chatModalProposalId === null || !chatDraft.trim()}
-                >
-                  Send Message
-                </Button>
-              </Flex>
             </Form>
           </Space>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={proposalDetailsModalId !== null}
+        title={proposalDetailsModalProposal ? `${proposalDetailsModalProposal.title} - Meeting Notes` : "Proposal Details"}
+        onCancel={() => setProposalDetailsModalId(null)}
+        footer={
+          <Button onClick={() => setProposalDetailsModalId(null)}>
+            Close
+          </Button>
+        }
+        centered
+        width={{
+          xs: "95%",
+          sm: "90%",
+          md: "80%",
+          lg: "70%",
+          xl: "65%",
+          xxl: "60%",
+        }}
+      >
+        {proposalDetailsModalProposal ? (
+          <ProposalMeetingNotes
+            proposalId={proposalDetailsModalProposal.id}
+            proposal={proposalDetailsModalProposal}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={generateCommModalProposalId !== null}
+        title={
+          generateCommModalProposal
+            ? `${generateCommModalProposal.title} - Communications`
+            : "Communications"
+        }
+        onCancel={() => setGenerateCommModalProposalId(null)}
+        footer={
+          <Button onClick={() => setGenerateCommModalProposalId(null)}>
+            Close
+          </Button>
+        }
+        centered
+        width={{
+          xs: "95%",
+          sm: "92%",
+          md: "80%",
+          lg: "72%",
+          xl: "66%",
+          xxl: "60%",
+        }}
+      >
+        <Space orientation="vertical" size="large" style={{ width: "100%" }}>
+          <Card size="small" type="inner" title="Generate New Communication">
+            {generateCommModalProposal ? (
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+                Generate a proposal-specific communication for {generateCommModalProposal.company.name}.
+              </Typography.Paragraph>
+            ) : null}
+            <Form
+              key={`${generateCommModalProposalId ?? "closed"}-${generateCommFormVersion}`}
+              layout="vertical"
+              initialValues={{ proposalId: generateCommModalProposalId ?? undefined }}
+              preserve={false}
+              onFinish={(values) => generationMutation.mutate(values)}
+            >
+              <Form.Item name="proposalId" hidden>
+                <InputNumber />
+              </Form.Item>
+              <Row gutter={12}>
+                <Col xs={24} md={12}>
+                  <Form.Item name="stakeholderRole" label="Role" rules={[{ required: true }]}>
+                    <Select options={STAKEHOLDER_ROLE_OPTIONS} placeholder="Select stakeholder role" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item name="personaId" label="Persona (optional)">
+                    <SearchSelect allowClear options={personaOptions} />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Button type="primary" htmlType="submit" loading={generationMutation.isPending}>
+                Generate Message
+              </Button>
+            </Form>
+          </Card>
+
+          <Card size="small" type="inner" title={`Generated Messages (${proposalGeneratedMessages.length})`}>
+            {generatedMessagesQuery.isLoading ? (
+              <Typography.Text type="secondary">Loading generated communications...</Typography.Text>
+            ) : proposalGeneratedMessages.length === 0 ? (
+              <Empty description="No generated communications for this proposal yet." />
+            ) : (
+              <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
+                {proposalGeneratedMessages.map((item) => {
+                  const isSelected = item.id === selectedGeneratedCommunicationId;
+                  const isDeleting =
+                    deleteGeneratedCommunicationMutation.isPending &&
+                    deleteGeneratedCommunicationMutation.variables?.generatedCommunicationId === item.id;
+                  const isDuplicating =
+                    duplicateGeneratedCommunicationMutation.isPending &&
+                    duplicateGeneratedCommunicationMutation.variables?.generatedCommunicationId === item.id;
+
+                  return (
+                    <Card
+                      key={item.id}
+                      size="small"
+                      style={{
+                        borderColor: isSelected ? "#1677ff" : undefined,
+                      }}
+                    >
+                      <Flex justify="space-between" align="start" gap={12} wrap="wrap">
+                        <Space orientation="vertical" size={2}>
+                          <Space size={8} wrap>
+                            <Tag color="blue">{item.stakeholderRole}</Tag>
+                            {item.persona ? <Tag>{item.persona.fullName}</Tag> : null}
+                            <Typography.Text type="secondary">
+                              {new Date(item.createdAt).toLocaleString()}
+                            </Typography.Text>
+                          </Space>
+                          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                            {item.generatedMessage}
+                          </Typography.Paragraph>
+                        </Space>
+                        <Space size="small" wrap>
+                          <Button size="small" onClick={() => setSelectedGeneratedCommunicationId(item.id)}>
+                            {isSelected ? "Editing" : "Edit"}
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              duplicateGeneratedCommunicationMutation.mutate({
+                                generatedCommunicationId: item.id,
+                              });
+                            }}
+                            loading={isDuplicating}
+                          >
+                            Duplicate
+                          </Button>
+                          <Button
+                            size="small"
+                            danger
+                            onClick={() => {
+                              modal.confirm({
+                                title: "Delete Generated Communication",
+                                content: "This saved generated communication will be permanently removed.",
+                                okText: "Delete",
+                                okType: "danger",
+                                cancelText: "Cancel",
+                                onOk() {
+                                  deleteGeneratedCommunicationMutation.mutate({
+                                    generatedCommunicationId: item.id,
+                                  });
+                                },
+                              });
+                            }}
+                            loading={isDeleting}
+                          >
+                            Delete
+                          </Button>
+                        </Space>
+                      </Flex>
+                    </Card>
+                  );
+                })}
+
+                {selectedGeneratedCommunication ? (
+                  <Card
+                    size="small"
+                    type="inner"
+                    title={`Edit Message: ${selectedGeneratedCommunication.stakeholderRole}`}
+                  >
+                    <Space orientation="vertical" size="small" style={{ width: "100%" }}>
+                      <TextArea
+                        value={generatedCommunicationDraft}
+                        onChange={(event) => setGeneratedCommunicationDraft(event.target.value)}
+                        rows={8}
+                        placeholder="Edit the generated communication"
+                      />
+                      <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+                        <Typography.Text type="secondary">
+                          Update the saved generated message for this proposal.
+                        </Typography.Text>
+                        <Button
+                          type="primary"
+                          onClick={() => {
+                            if (!selectedGeneratedCommunication || !generatedCommunicationDraft.trim()) {
+                              return;
+                            }
+
+                            updateGeneratedCommunicationMutation.mutate({
+                              generatedCommunicationId: selectedGeneratedCommunication.id,
+                              generatedMessage: generatedCommunicationDraft.trim(),
+                            });
+                          }}
+                          loading={updateGeneratedCommunicationMutation.isPending}
+                          disabled={
+                            !generatedCommunicationDraft.trim() ||
+                            generatedCommunicationDraft.trim() ===
+                              selectedGeneratedCommunication.generatedMessage.trim()
+                          }
+                        >
+                          Save Changes
+                        </Button>
+                      </Flex>
+                    </Space>
+                  </Card>
+                ) : null}
+              </Space>
+            )}
+          </Card>
+        </Space>
       </Modal>
 
       <Divider />

@@ -351,6 +351,100 @@ export const proposalChatMessages = createTable(
   ]
 );
 
+export const transcriptionTypeEnum = pgEnum("transcription_type", [
+  "assembly_ai",
+  "manual_transcript",
+  "manual_notes",
+]);
+
+export const proposalMeetings = createTable(
+  "proposal_meeting",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    proposalId: d
+      .integer()
+      .notNull()
+      .references(() => proposals.id, { onDelete: "cascade" }),
+    title: d.varchar({ length: 255 }).notNull(),
+    description: d.text(),
+    audioUrl: d.varchar({ length: 500 }),
+    assemblyAiTranscriptId: d.varchar({ length: 255 }),
+    transcriptionType: transcriptionTypeEnum().notNull().default("assembly_ai"),
+    manualTranscript: d.text(),
+    transcriptJson: d
+      .jsonb()
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    summary: d.text(),
+    summaryGeneratedAt: d.timestamp({ withTimezone: true }),
+    meetingAnalysis: d.text(),
+    analysisGeneratedAt: d.timestamp({ withTimezone: true }),
+    nextSteps: d.text(),
+    nextStepsGeneratedAt: d.timestamp({ withTimezone: true }),
+    recordingDate: d.timestamp({ withTimezone: true }).$defaultFn(() => new Date()),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+  }),
+  (t) => [
+    index("proposal_meeting_proposal_idx").on(t.proposalId),
+    index("proposal_meeting_assembly_ai_idx").on(t.assemblyAiTranscriptId),
+    index("proposal_meeting_transcription_type_idx").on(t.transcriptionType),
+  ]
+);
+
+export const proposalMeetingSpeakers = createTable(
+  "proposal_meeting_speaker",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    meetingId: d
+      .integer()
+      .notNull()
+      .references(() => proposalMeetings.id, { onDelete: "cascade" }),
+    speakerId: d.integer().notNull(),
+    speakerLabel: d.varchar({ length: 50 }).notNull(),
+    speakerName: d.varchar({ length: 255 }),
+    linkedStakeholderId: d.integer().references(() => personas.id, { onDelete: "set null" }),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    index("proposal_meeting_speaker_meeting_idx").on(t.meetingId),
+    index("proposal_meeting_speaker_stakeholder_idx").on(t.linkedStakeholderId),
+    uniqueIndex("proposal_meeting_speaker_unique_idx").on(t.meetingId, t.speakerId),
+  ]
+);
+
+export const proposalMeetingTranscripts = createTable(
+  "proposal_meeting_transcript",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    meetingId: d
+      .integer()
+      .notNull()
+      .references(() => proposalMeetings.id, { onDelete: "cascade" }),
+    speakerId: d.integer().notNull(),
+    speakerLabel: d.varchar({ length: 50 }).notNull(),
+    text: d.text().notNull(),
+    confidence: d.real(),
+    startTime: d.real(),
+    endTime: d.real(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    index("proposal_meeting_transcript_meeting_idx").on(t.meetingId),
+    index("proposal_meeting_transcript_speaker_idx").on(t.speakerId),
+  ]
+);
+
 export const users = createTable("user", (d) => ({
   id: d
     .varchar({ length: 255 })
@@ -411,6 +505,7 @@ export const proposalsRelations = relations(proposals, ({ one, many }) => ({
   evaluations: many(proposalEvaluations),
   generatedCommunications: many(generatedCommunications),
   chatSessions: many(proposalChatSessions),
+  meetings: many(proposalMeetings),
 }));
 
 export const proposalStakeholdersRelations = relations(
@@ -475,6 +570,42 @@ export const proposalChatMessagesRelations = relations(
     session: one(proposalChatSessions, {
       fields: [proposalChatMessages.sessionId],
       references: [proposalChatSessions.id],
+    }),
+  })
+);
+
+export const proposalMeetingsRelations = relations(
+  proposalMeetings,
+  ({ one, many }) => ({
+    proposal: one(proposals, {
+      fields: [proposalMeetings.proposalId],
+      references: [proposals.id],
+    }),
+    speakers: many(proposalMeetingSpeakers),
+    transcripts: many(proposalMeetingTranscripts),
+  })
+);
+
+export const proposalMeetingSpeakersRelations = relations(
+  proposalMeetingSpeakers,
+  ({ one }) => ({
+    meeting: one(proposalMeetings, {
+      fields: [proposalMeetingSpeakers.meetingId],
+      references: [proposalMeetings.id],
+    }),
+    linkedStakeholder: one(personas, {
+      fields: [proposalMeetingSpeakers.linkedStakeholderId],
+      references: [personas.id],
+    }),
+  })
+);
+
+export const proposalMeetingTranscriptsRelations = relations(
+  proposalMeetingTranscripts,
+  ({ one }) => ({
+    meeting: one(proposalMeetings, {
+      fields: [proposalMeetingTranscripts.meetingId],
+      references: [proposalMeetings.id],
     }),
   })
 );
