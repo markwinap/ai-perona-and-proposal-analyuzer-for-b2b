@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import {
   Button,
   Card,
+  Collapse,
   Col,
   Divider,
   Dropdown,
@@ -77,6 +78,8 @@ export function PersonaPortal() {
   const [analyzePersonaModalId, setAnalyzePersonaModalId] = useState<number | null>(null);
   const [rfpAnalysisModalProposalId, setRfpAnalysisModalProposalId] = useState<number | null>(null);
   const [stakeholderModalProposalId, setStakeholderModalProposalId] = useState<number | null>(null);
+  const [chatModalProposalId, setChatModalProposalId] = useState<number | null>(null);
+  const [chatDraft, setChatDraft] = useState("");
   const [showManualEvaluation, setShowManualEvaluation] = useState(false);
   const [showGenerateComm, setShowGenerateComm] = useState(false);
   const [generatingFromEvaluationId, setGeneratingFromEvaluationId] = useState<number | null>(null);
@@ -105,6 +108,10 @@ export function PersonaPortal() {
   const communicationsQuery = api.persona.listCommunications.useQuery();
   const proposalsQuery = api.proposal.list.useQuery();
   const generatedMessagesQuery = api.proposal.listGeneratedCommunications.useQuery();
+  const proposalChatQuery = api.proposal.getChatSession.useQuery(
+    { proposalId: chatModalProposalId ?? 1 },
+    { enabled: chatModalProposalId !== null }
+  );
 
   const companyMutation = api.company.create.useMutation({
     onSuccess: async () => {
@@ -249,6 +256,31 @@ export function PersonaPortal() {
     onError: (error) => messageApi.error(error.message),
   });
 
+  const sendChatMessageMutation = api.proposal.sendChatMessage.useMutation({
+    onSuccess: async () => {
+      if (chatModalProposalId === null) {
+        return;
+      }
+
+      await utils.proposal.getChatSession.invalidate({ proposalId: chatModalProposalId });
+      setChatDraft("");
+    },
+    onError: (error) => messageApi.error(error.message),
+  });
+
+  const resetChatHistoryMutation = api.proposal.resetChatHistory.useMutation({
+    onSuccess: async () => {
+      if (chatModalProposalId === null) {
+        return;
+      }
+
+      await utils.proposal.getChatSession.invalidate({ proposalId: chatModalProposalId });
+      setChatDraft("");
+      messageApi.success("Chat history deleted. Default context is ready for a new conversation.");
+    },
+    onError: (error) => messageApi.error(error.message),
+  });
+
   const companies = companiesQuery.data ?? [];
   const personas = personasQuery.data ?? [];
   const proposals = proposalsQuery.data ?? [];
@@ -288,6 +320,8 @@ export function PersonaPortal() {
     : null;
   const stakeholderModalProposal =
     stakeholderModalProposalId === null ? null : proposalById.get(stakeholderModalProposalId) ?? null;
+  const chatModalProposal =
+    chatModalProposalId === null ? null : proposalById.get(chatModalProposalId) ?? null;
 
   const closeCompanyEditor = () => {
     // if (!shouldCloseEditor(editCompanyForm.isFieldsTouched(), "Discard unsaved company changes?")) {
@@ -689,6 +723,14 @@ export function PersonaPortal() {
                                 onClick={() => setRfpAnalysisModalProposalId(row.id)}
                               >
                                 AI Analysis
+                              </Button>
+                              <Button
+                                size="small"
+                                type="primary"
+                                ghost
+                                onClick={() => setChatModalProposalId(row.id)}
+                              >
+                                Chat
                               </Button>
                               <Button
                                 size="small"
@@ -1700,6 +1742,166 @@ export function PersonaPortal() {
               <TextArea autoSize={{ minRows: 2 }} placeholder="Lead with phased implementation and compliance evidence" />
             </Form.Item>
           </Form>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={chatModalProposalId !== null}
+        title={chatModalProposal ? `Proposal Chat: ${chatModalProposal.title}` : "Proposal Chat"}
+        onCancel={() => {
+          setChatModalProposalId(null);
+          setChatDraft("");
+        }}
+        footer={
+          <Flex justify="end" style={{ width: "100%" }}>
+            <Button
+              onClick={() => {
+                setChatModalProposalId(null);
+                setChatDraft("");
+              }}
+            >
+              Close
+            </Button>
+          </Flex>
+        }
+        centered
+        width={{
+          xs: "95%",
+          sm: "90%",
+          md: "80%",
+          lg: "70%",
+          xl: "65%",
+          xxl: "60%",
+        }}
+      >
+        {chatModalProposalId !== null ? (
+          <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
+            <Flex justify="space-between" align="center" wrap gap="small">
+              <Typography.Text type="secondary">
+                Resume this conversation anytime. Messages are stored in the database for this proposal.
+              </Typography.Text>
+              <Button
+                danger
+                type="text"
+                loading={resetChatHistoryMutation.isPending}
+                disabled={chatModalProposalId === null}
+                onClick={() => {
+                  if (chatModalProposalId === null) {
+                    return;
+                  }
+
+                  modal.confirm({
+                    title: "Delete chat history?",
+                    content: "This will clear all messages and restart from the default context.",
+                    okText: "Delete & Restart",
+                    okType: "danger",
+                    cancelText: "Cancel",
+                    onOk() {
+                      resetChatHistoryMutation.mutate({ proposalId: chatModalProposalId });
+                    },
+                  });
+                }}
+              >
+                Delete History & Restart
+              </Button>
+            </Flex>
+
+            <Collapse
+              items={[
+                {
+                  key: "default-context",
+                  label: "Default Context (Proposal + Stakeholders + Company)",
+                  children: (
+                    <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
+                      {proposalChatQuery.data?.session.defaultContext ?? "Loading proposal context..."}
+                    </Typography.Paragraph>
+                  ),
+                },
+              ]}
+            />
+
+            <Card size="small" title="Conversation">
+              {proposalChatQuery.isLoading ? (
+                <Typography.Text type="secondary">Loading chat history...</Typography.Text>
+              ) : (proposalChatQuery.data?.messages.length ?? 0) === 0 ? (
+                <Typography.Text type="secondary">
+                  No chat history yet. Ask a question to start from the default context.
+                </Typography.Text>
+              ) : (
+                <Space orientation="vertical" size="small" style={{ width: "100%" }}>
+                  {(proposalChatQuery.data?.messages ?? []).map((msg) => (
+                    <Card key={msg.id} size="small" type="inner">
+                      <Space orientation="vertical" size={4} style={{ width: "100%" }}>
+                        <Tag color={msg.role === "assistant" ? "blue" : "green"}>
+                          {msg.role === "assistant" ? "Assistant" : "You"}
+                        </Tag>
+                        <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
+                          {msg.content}
+                        </Typography.Paragraph>
+                      </Space>
+                    </Card>
+                  ))}
+                </Space>
+              )}
+            </Card>
+
+            <Form
+              layout="vertical"
+              onFinish={() => {
+                if (chatModalProposalId === null || !chatDraft.trim()) {
+                  return;
+                }
+
+                sendChatMessageMutation.mutate({
+                  proposalId: chatModalProposalId,
+                  message: chatDraft.trim(),
+                });
+              }}
+            >
+              <Form.Item
+                label="Message"
+                extra={<Typography.Text type="secondary">Press Enter to send. Use Shift+Enter for a newline.</Typography.Text>}
+              >
+                <TextArea
+                  value={chatDraft}
+                  onChange={(event) => setChatDraft(event.target.value)}
+                  onPressEnter={(event) => {
+                    if (event.shiftKey) {
+                      return;
+                    }
+
+                    event.preventDefault();
+
+                    if (
+                      chatModalProposalId === null ||
+                      !chatDraft.trim() ||
+                      sendChatMessageMutation.isPending
+                    ) {
+                      return;
+                    }
+
+                    sendChatMessageMutation.mutate({
+                      proposalId: chatModalProposalId,
+                      message: chatDraft.trim(),
+                    });
+                  }}
+                  rows={3}
+                  placeholder="Ask about strategy, stakeholder-specific talking points, risk handling, or proposal positioning..."
+                />
+              </Form.Item>
+              <Flex justify="end">
+                <Button
+                  htmlType="submit"
+                  type="primary"
+                  size="large"
+                  loading={sendChatMessageMutation.isPending}
+                  disabled={chatModalProposalId === null || !chatDraft.trim()}
+                >
+                  Send Message
+                </Button>
+              </Flex>
+            </Form>
+          </Space>
         ) : null}
       </Modal>
 

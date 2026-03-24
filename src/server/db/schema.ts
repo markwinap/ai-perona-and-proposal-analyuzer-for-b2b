@@ -47,6 +47,11 @@ export const aiProviderEnum = pgEnum("ai_provider", [
   "copilot",
 ]);
 
+export const chatMessageRoleEnum = pgEnum("chat_message_role", [
+  "user",
+  "assistant",
+]);
+
 export const proposalOutcomeEnum = pgEnum("proposal_outcome", [
   "success",
   "failure",
@@ -304,6 +309,48 @@ export const generatedCommunications = createTable(
   ]
 );
 
+export const proposalChatSessions = createTable(
+  "proposal_chat_session",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    proposalId: d
+      .integer()
+      .notNull()
+      .references(() => proposals.id, { onDelete: "cascade" }),
+    defaultContext: d.text().notNull(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+  }),
+  (t) => [
+    uniqueIndex("proposal_chat_session_proposal_unique_idx").on(t.proposalId),
+    index("proposal_chat_session_proposal_idx").on(t.proposalId),
+  ]
+);
+
+export const proposalChatMessages = createTable(
+  "proposal_chat_message",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    sessionId: d
+      .integer()
+      .notNull()
+      .references(() => proposalChatSessions.id, { onDelete: "cascade" }),
+    role: chatMessageRoleEnum().notNull(),
+    content: d.text().notNull(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    index("proposal_chat_message_session_idx").on(t.sessionId),
+    index("proposal_chat_message_role_idx").on(t.role),
+  ]
+);
+
 export const users = createTable("user", (d) => ({
   id: d
     .varchar({ length: 255 })
@@ -363,6 +410,7 @@ export const proposalsRelations = relations(proposals, ({ one, many }) => ({
   stakeholders: many(proposalStakeholders),
   evaluations: many(proposalEvaluations),
   generatedCommunications: many(generatedCommunications),
+  chatSessions: many(proposalChatSessions),
 }));
 
 export const proposalStakeholdersRelations = relations(
@@ -406,6 +454,27 @@ export const generatedCommunicationsRelations = relations(
     persona: one(personas, {
       fields: [generatedCommunications.personaId],
       references: [personas.id],
+    }),
+  })
+);
+
+export const proposalChatSessionsRelations = relations(
+  proposalChatSessions,
+  ({ one, many }) => ({
+    proposal: one(proposals, {
+      fields: [proposalChatSessions.proposalId],
+      references: [proposals.id],
+    }),
+    messages: many(proposalChatMessages),
+  })
+);
+
+export const proposalChatMessagesRelations = relations(
+  proposalChatMessages,
+  ({ one }) => ({
+    session: one(proposalChatSessions, {
+      fields: [proposalChatMessages.sessionId],
+      references: [proposalChatSessions.id],
     }),
   })
 );

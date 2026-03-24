@@ -1,10 +1,12 @@
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
     aiPrompts,
     generatedCommunications,
+    proposalChatMessages,
+    proposalChatSessions,
     proposalEvaluations,
     proposalOutcomeEnum,
     proposals,
@@ -16,6 +18,10 @@ import {
     analyzeRfpProposalWithAI,
     generateRfpProposalFromRecommendationWithAI,
 } from "~/server/services/proposal-analysis";
+import {
+    buildProposalChatContext,
+    generateProposalChatReply,
+} from "~/server/services/proposal-chat";
 import { DEFAULT_PROMPTS } from "~/server/services/prompt-defaults";
 import { translateTextToSpanishLatam } from "~/server/services/translation";
 
@@ -47,6 +53,107 @@ const createMessage = (params: {
   ]
     .filter(Boolean)
     .join("\n");
+};
+
+const loadProposalChatContext = async (
+    ctx: { db: typeof import("~/server/db").db },
+    proposalId: number
+) => {
+    const proposal = await ctx.db.query.proposals.findFirst({
+        where: eq(proposals.id, proposalId),
+        with: {
+            company: true,
+            stakeholders: {
+                with: {
+                    persona: true,
+                },
+            },
+        },
+    });
+
+    if (!proposal) {
+        throw new Error("Proposal not found");
+    }
+
+    const defaultContext = buildProposalChatContext({
+        proposal: {
+            id: proposal.id,
+            title: proposal.title,
+            summary: proposal.summary,
+            intentSignals: proposal.intentSignals,
+            technologyFit: proposal.technologyFit,
+            status: proposal.status,
+            outcome: proposal.outcome,
+            outcomeReason: proposal.outcomeReason,
+        },
+        company: {
+            name: proposal.company.name,
+            industry: proposal.company.industry,
+            businessIntent: proposal.company.businessIntent,
+            technologyIntent: proposal.company.technologyIntent,
+            developmentStacks: proposal.company.developmentStacks,
+            certifications: proposal.company.certifications,
+            standards: proposal.company.standards,
+            partnerships: proposal.company.partnerships,
+            referenceArchitectures: proposal.company.referenceArchitectures,
+            engineeringGuidelines: proposal.company.engineeringGuidelines,
+        },
+        stakeholders: proposal.stakeholders.map((stakeholder) => ({
+            fullName: stakeholder.persona.fullName,
+            role: stakeholder.role,
+            influenceLevel: stakeholder.influenceLevel,
+            notes: stakeholder.notes,
+            personalitySummary: stakeholder.persona.personalitySummary,
+            jobDescription: stakeholder.persona.jobDescription,
+        })),
+    });
+
+    return {
+        proposal,
+        defaultContext,
+    };
+};
+
+const ensureProposalChatSession = async (
+    ctx: { db: typeof import("~/server/db").db },
+    proposalId: number
+) => {
+    const { defaultContext } = await loadProposalChatContext(ctx, proposalId);
+
+    const existing = await ctx.db.query.proposalChatSessions.findFirst({
+        where: eq(proposalChatSessions.proposalId, proposalId),
+    });
+
+    if (existing) {
+        if (existing.defaultContext !== defaultContext) {
+            const [updated] = await ctx.db
+                .update(proposalChatSessions)
+                .set({
+                    defaultContext,
+                    updatedAt: new Date(),
+                })
+                .where(eq(proposalChatSessions.id, existing.id))
+                .returning();
+
+            return updated ?? existing;
+        }
+
+        return existing;
+    }
+
+    const [created] = await ctx.db
+        .insert(proposalChatSessions)
+        .values({
+            proposalId,
+            defaultContext,
+        })
+        .returning();
+
+    if (!created) {
+        throw new Error("Failed to initialize proposal chat session.");
+    }
+
+    return created;
 };
 
 export const proposalRouter = createTRPCRouter({
@@ -483,6 +590,119 @@ export const proposalRouter = createTRPCRouter({
                     persona: true,
                 },
             });
+        }),
+
+    getChatSession: publicProcedure
+        .input(
+            z.object({
+                proposalId: z.number().int().positive(),
+            })
+        )
+        .query(async ({ ctx, input }) => {
+            const session = await ensureProposalChatSession(ctx, input.proposalId);
+
+            const messages = await ctx.db.query.proposalChatMessages.findMany({
+                where: eq(proposalChatMessages.sessionId, session.id),
+                orderBy: [asc(proposalChatMessages.createdAt)],
+            });
+
+            return {
+                session,
+                messages,
+            };
+        }),
+
+    sendChatMessage: publicProcedure
+        .input(
+            z.object({
+                proposalId: z.number().int().positive(),
+                message: z.string().min(1),
+            })
+        )
+        .mutation(async ({ ctx, input }) => {
+            const session = await ensureProposalChatSession(ctx, input.proposalId);
+
+            const [userMessage] = await ctx.db
+                .insert(proposalChatMessages)
+                .values({
+                    sessionId: session.id,
+                    role: "user",
+                    content: input.message,
+                })
+                .returning();
+
+            if (!userMessage) {
+                throw new Error("Failed to persist user chat message.");
+            }
+
+            const history = await ctx.db.query.proposalChatMessages.findMany({
+                where: eq(proposalChatMessages.sessionId, session.id),
+                orderBy: [asc(proposalChatMessages.createdAt)],
+            });
+
+            const assistantReply = await generateProposalChatReply({
+                defaultContext: session.defaultContext,
+                history: history
+                    .filter((message) => message.id !== userMessage.id)
+                    .map((message) => ({
+                        role: message.role,
+                        content: message.content,
+                    })),
+                userMessage: input.message,
+            });
+
+            const [assistantMessage] = await ctx.db
+                .insert(proposalChatMessages)
+                .values({
+                    sessionId: session.id,
+                    role: "assistant",
+                    content: assistantReply,
+                })
+                .returning();
+
+            if (!assistantMessage) {
+                throw new Error("Failed to persist assistant chat message.");
+            }
+
+            await ctx.db
+                .update(proposalChatSessions)
+                .set({
+                    updatedAt: new Date(),
+                })
+                .where(eq(proposalChatSessions.id, session.id));
+
+            return {
+                userMessage,
+                assistantMessage,
+            };
+        }),
+
+    resetChatHistory: publicProcedure
+        .input(
+            z.object({
+                proposalId: z.number().int().positive(),
+            })
+        )
+        .mutation(async ({ ctx, input }) => {
+            const refreshed = await ensureProposalChatSession(ctx, input.proposalId);
+
+            await ctx.db
+                .delete(proposalChatMessages)
+                .where(eq(proposalChatMessages.sessionId, refreshed.id));
+
+            await ctx.db
+                .update(proposalChatSessions)
+                .set({
+                    defaultContext: refreshed.defaultContext,
+                    updatedAt: new Date(),
+                })
+                .where(eq(proposalChatSessions.id, refreshed.id));
+
+            return {
+                sessionId: refreshed.id,
+                defaultContext: refreshed.defaultContext,
+                cleared: true,
+            };
         }),
 
     translateAnalysis: publicProcedure
