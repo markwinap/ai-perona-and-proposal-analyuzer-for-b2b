@@ -3,12 +3,14 @@ import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
+  aiPrompts,
   communicationTypeEnum,
   personaCommunications,
   personas,
   proposals,
 } from "~/server/db/schema";
 import { analyzePersonaWithAI } from "~/server/services/persona-analysis";
+import { DEFAULT_PROMPTS } from "~/server/services/prompt-defaults";
 import { translateTextToSpanishLatam } from "~/server/services/translation";
 
 export const personaRouter = createTRPCRouter({
@@ -176,6 +178,16 @@ export const personaRouter = createTRPCRouter({
         limit: 25,
       });
 
+      const promptRecord = await ctx.db.query.aiPrompts.findFirst({
+        where: eq(aiPrompts.key, "persona_analysis"),
+      });
+
+      const promptOverride = {
+        promptTemplate: promptRecord?.promptTemplate ?? DEFAULT_PROMPTS.persona_analysis.promptTemplate,
+        systemInstruction:
+          promptRecord?.systemInstruction ?? DEFAULT_PROMPTS.persona_analysis.systemInstruction,
+      };
+
       const analysis = await analyzePersonaWithAI({
         fullName: persona.fullName,
         companyName: persona.company.name,
@@ -208,7 +220,7 @@ export const personaRouter = createTRPCRouter({
           technologyFit: proposal.technologyFit,
           outcomeReason: proposal.outcomeReason,
         })),
-      });
+      }, promptOverride);
 
       // Save analysis to database
       const now = new Date();

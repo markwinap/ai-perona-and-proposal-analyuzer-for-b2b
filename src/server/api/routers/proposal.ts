@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
+    aiPrompts,
     generatedCommunications,
     proposalEvaluations,
     proposalOutcomeEnum,
@@ -15,6 +16,7 @@ import {
     analyzeRfpProposalWithAI,
     generateRfpProposalFromRecommendationWithAI,
 } from "~/server/services/proposal-analysis";
+import { DEFAULT_PROMPTS } from "~/server/services/prompt-defaults";
 import { translateTextToSpanishLatam } from "~/server/services/translation";
 
 const createMessage = (params: {
@@ -228,6 +230,10 @@ export const proposalRouter = createTRPCRouter({
                 throw new Error("Proposal not found");
             }
 
+            const rfpPromptRecord = await ctx.db.query.aiPrompts.findFirst({
+                where: eq(aiPrompts.key, "rfp_analysis"),
+            });
+
             const analysis = await analyzeRfpProposalWithAI({
                 proposal: {
                     title: proposal.title,
@@ -265,6 +271,8 @@ export const proposalRouter = createTRPCRouter({
                     failureRiskScore: evaluation.failureRiskScore,
                     recommendation: evaluation.recommendation,
                 })),
+            }, {
+                promptTemplate: rfpPromptRecord?.promptTemplate ?? DEFAULT_PROMPTS.rfp_analysis.promptTemplate,
             });
 
             const [insertedEvaluation] = await ctx.db
@@ -328,6 +336,10 @@ export const proposalRouter = createTRPCRouter({
                 throw new Error("Selected analysis has no recommendation to generate from.");
             }
 
+            const draftPromptRecord = await ctx.db.query.aiPrompts.findFirst({
+                where: eq(aiPrompts.key, "proposal_draft"),
+            });
+
             const draft = await generateRfpProposalFromRecommendationWithAI({
                 sourceProposal: {
                     title: sourceProposal.title,
@@ -360,6 +372,8 @@ export const proposalRouter = createTRPCRouter({
                     successScore: selectedEvaluation.successScore,
                     failureRiskScore: selectedEvaluation.failureRiskScore,
                 },
+            }, {
+                promptTemplate: draftPromptRecord?.promptTemplate ?? DEFAULT_PROMPTS.proposal_draft.promptTemplate,
             });
 
             const [newProposal] = await ctx.db

@@ -1,4 +1,5 @@
 import { env } from "~/env";
+import { applyTemplate, DEFAULT_PROMPTS } from "./prompt-defaults";
 
 type RfpAnalysisInput = {
   proposal: {
@@ -162,25 +163,11 @@ const extractJsonObject = (text: string) => {
   return text.slice(start, end + 1);
 };
 
-const buildPrompt = (input: RfpAnalysisInput) => {
-  return `Analyze this RFP proposal context and provide a practical win/loss risk evaluation.
-
-Return JSON only in this exact shape:
-{
-  "successSignals": "string",
-  "failureSignals": "string",
-  "successScore": 0,
-  "failureRiskScore": 0,
-  "recommendation": "string"
-}
-
-Rules:
-- successScore and failureRiskScore must be integers from 0 to 100.
-- Use only the provided context.
-- Be concrete and concise.
-
-CONTEXT:
-${JSON.stringify(input, null, 2)}`;
+const buildPrompt = (input: RfpAnalysisInput, template?: string | null) => {
+  const activeTemplate = template ?? DEFAULT_PROMPTS.rfp_analysis.promptTemplate;
+  return applyTemplate(activeTemplate, {
+    CONTEXT: JSON.stringify(input, null, 2),
+  });
 };
 
 const fallbackGeneratedProposalDraft = (
@@ -246,67 +233,16 @@ const fallbackGeneratedProposalDraft = (
   };
 };
 
-const buildProposalDraftPrompt = (input: RecommendationProposalInput) => {
-  return `You are an expert enterprise solutions consultant preparing a high-quality RFP proposal draft based on an AI-generated recommendation.
-
-Your goal is to produce a concise, executive-ready proposal that is actionable, outcome-driven, and clearly justified.
-
-Return JSON only in this exact shape:
-{
-  "title": "string",
-  "summary": "string",
-  "intentSignals": "string",
-  "technologyFit": "string",
-  "rationale": "string"
-}
-
-DETAILED INSTRUCTIONS:
-
-- title:
-  - Make it specific, outcome-focused, and business-oriented.
-  - Clearly reflect the value or transformation (not generic wording).
-
-- summary:
-  - 3–5 sentences max.
-  - Clearly describe the proposed solution, expected business impact, and timeline or scope if implied.
-  - Include measurable outcomes (e.g., % cost reduction, efficiency gain, revenue impact) when possible.
-
-- intentSignals:
-  - Identify key signals from the context that justify why this proposal is relevant now.
-  - Reference business needs, pain points, constraints, or strategic priorities.
-  - Avoid generic statements—tie directly to the input.
-
-- technologyFit:
-  - Explain why the recommended technology or approach is appropriate.
-  - Include:
-    - Compatibility with current systems (if mentioned)
-    - Scalability and flexibility
-    - Implementation complexity level (low/medium/high)
-  - Highlight any assumptions clearly if data is incomplete.
-
-- rationale:
-  - Provide a structured justification including:
-    - Business value (ROI, efficiency, risk reduction, growth)
-    - Key trade-offs or alternatives (if implied)
-    - Risks and mitigation strategies
-  - Include at least 2 concrete risks and how they would be mitigated.
-  - Keep it practical and decision-oriented.
-
-GLOBAL RULES:
-- Be concise but complete—no fluff.
-- Prioritize clarity over technical jargon.
-- Use only the context provided below—do not invent facts.
-- If data is missing, make conservative assumptions and state them briefly.
-- Avoid repetition across fields.
-- Write in a tone suitable for senior management.
-
-CONTEXT:
-${JSON.stringify(input, null, 2)}
-`;
+const buildProposalDraftPrompt = (input: RecommendationProposalInput, template?: string | null) => {
+  const activeTemplate = template ?? DEFAULT_PROMPTS.proposal_draft.promptTemplate;
+  return applyTemplate(activeTemplate, {
+    CONTEXT: JSON.stringify(input, null, 2),
+  });
 };
 
 export async function analyzeRfpProposalWithAI(
-  input: RfpAnalysisInput
+  input: RfpAnalysisInput,
+  promptOverride?: { promptTemplate?: string | null }
 ): Promise<RfpAnalysisResult> {
   if (!env.GOOGLE_GEMINI_API_KEY) {
     return fallbackRfpAnalysis(input);
@@ -324,7 +260,7 @@ export async function analyzeRfpProposalWithAI(
       contents: [
         {
           role: "user",
-          parts: [{ text: buildPrompt(input) }],
+          parts: [{ text: buildPrompt(input, promptOverride?.promptTemplate) }],
         },
       ],
       generationConfig: {
@@ -394,7 +330,8 @@ export async function analyzeRfpProposalWithAI(
 }
 
 export async function generateRfpProposalFromRecommendationWithAI(
-  input: RecommendationProposalInput
+  input: RecommendationProposalInput,
+  promptOverride?: { promptTemplate?: string | null }
 ): Promise<GeneratedRfpProposalDraft> {
   if (!env.GOOGLE_GEMINI_API_KEY) {
     return fallbackGeneratedProposalDraft(input);
@@ -412,7 +349,7 @@ export async function generateRfpProposalFromRecommendationWithAI(
       contents: [
         {
           role: "user",
-          parts: [{ text: buildProposalDraftPrompt(input) }],
+          parts: [{ text: buildProposalDraftPrompt(input, promptOverride?.promptTemplate) }],
         },
       ],
       generationConfig: {

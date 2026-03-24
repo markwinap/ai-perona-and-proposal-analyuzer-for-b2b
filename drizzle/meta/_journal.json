@@ -15,6 +15,13 @@
       "when": 1773887672383,
       "tag": "0001_spooky_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1742688000000,
+      "tag": "0003_add_ai_prompts",
+      "breakpoints": true
     }
   ]
 }

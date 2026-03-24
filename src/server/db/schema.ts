@@ -410,6 +410,25 @@ export const generatedCommunicationsRelations = relations(
   })
 );
 
+export const aiPrompts = createTable(
+  "ai_prompt",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    key: d.varchar({ length: 100 }).notNull(),
+    name: d.varchar({ length: 255 }).notNull(),
+    description: d.text(),
+    systemInstruction: d.text(),
+    promptTemplate: d.text().notNull(),
+    isActive: d.boolean().notNull().default(true),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+  }),
+  (t) => [uniqueIndex("ai_prompt_key_unique_idx").on(t.key)]
+);
+
 export const accounts = createTable(
   "account",
   (d) => ({

@@ -39,7 +39,9 @@ import {
   shouldCloseEditor,
 } from "./persona-portal.helpers";
 import { SearchSelect } from "./search-select";
+import { ThemeToggle } from "~/app/theme-toggle";
 import { api } from "~/trpc/react";
+import Link from "next/link";
 
 const { TextArea } = Input;
 const { useBreakpoint } = Grid;
@@ -412,15 +414,23 @@ export function PersonaPortal() {
       {modalContextHolder}
 
       <header className="hero-banner">
-        <div className="hero-copy">
-          <Typography.Title level={1} className="hero-title">
-            Persona Intelligence Portal
-          </Typography.Title>
-          <Typography.Paragraph className="hero-description">
-            Group insights by company, model stakeholder personas, track proposal win/loss signals,
-            and generate targeted communications for CTO, PO, Functional Tech Lead, and Tech Lead
-            audiences.
-          </Typography.Paragraph>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+          <div className="hero-copy">
+            <Typography.Title level={1} className="hero-title">
+              Persona Intelligence Portal
+            </Typography.Title>
+            <Typography.Paragraph className="hero-description">
+              Group insights by company, model stakeholder personas, track proposal win/loss signals,
+              and generate targeted communications for CTO, PO, Functional Tech Lead, and Tech Lead
+              audiences.
+            </Typography.Paragraph>
+          </div>
+          <Space>
+            <Link href="/admin">
+              <Button>Prompt Admin</Button>
+            </Link>
+            <ThemeToggle />
+          </Space>
         </div>
       </header>
 
