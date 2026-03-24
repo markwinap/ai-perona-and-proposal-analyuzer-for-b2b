@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+    App,
     Button,
     Card,
     Collapse,
@@ -17,6 +18,7 @@ import {
     Tag,
     Typography,
     message,
+    theme,
 } from "antd";
 import { AudioOutlined, CopyOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
 
@@ -95,6 +97,8 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
     const [finalSegmentsCount, setFinalSegmentsCount] = useState(0);
     const [lastRealtimeEventAt, setLastRealtimeEventAt] = useState<Date | null>(null);
     const [streamingProtocol, setStreamingProtocol] = useState<"v2" | "v3" | null>(null);
+    const { token } = theme.useToken();
+    const { modal } = App.useApp();
     const [messageApi, contextHolder] = message.useMessage();
 
     const wsRef = useRef<WebSocket | null>(null);
@@ -173,6 +177,7 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
     const completeStreamingMutation = api.proposal.completeStreamingTranscription.useMutation({
         onSuccess: async () => {
             await meetingNotesQuery.refetch();
+            setShowCreateMeeting(false);
             setIsStreaming(false);
             setStreamingTranscript("");
             setDetectedSpeakers([]);
@@ -518,7 +523,7 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
     };
 
     const handleDeleteMeeting = (meeting: ProposalMeeting) => {
-        Modal.confirm({
+        modal.confirm({
             title: "Delete meeting note?",
             content: `This will permanently delete "${meeting.title}" and all related speakers/transcript segments.`,
             okText: "Delete",
@@ -988,35 +993,39 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
                         layout="vertical"
                         onFinish={handleCreateMeeting}
                     >
-                        <Form.Item
-                            name="title"
-                            label="Meeting Title"
-                            rules={[{ required: true, message: "Please enter a meeting title" }]}
-                        >
-                            <Input placeholder="e.g., Stakeholder Alignment Meeting" />
-                        </Form.Item>
+                        {!isStreaming && (
+                            <>
+                                <Form.Item
+                                    name="title"
+                                    label="Meeting Title"
+                                    rules={[{ required: true, message: "Please enter a meeting title" }]}
+                                >
+                                    <Input placeholder="e.g., Stakeholder Alignment Meeting" />
+                                </Form.Item>
 
-                        <Form.Item name="description" label="Description">
-                            <TextArea rows={2} placeholder="Optional meeting notes or context" />
-                        </Form.Item>
+                                <Form.Item name="description" label="Description">
+                                    <TextArea rows={2} placeholder="Optional meeting notes or context" />
+                                </Form.Item>
 
-                        <Form.Item
-                            label="Transcription Type"
-                            required
-                        >
-                            <Radio.Group
-                                value={transcriptionType}
-                                onChange={(e) => {
-                                    setTranscriptionType(e.target.value);
-                                    setIsStreaming(false);
-                                    cleanupLiveStreaming();
-                                }}
-                            >
-                                <Radio.Button value="manual_notes">Manual Notes Only</Radio.Button>
-                                <Radio.Button value="manual_transcript">Manual Transcript</Radio.Button>
-                                <Radio.Button value="assembly_ai">Live Audio Streaming</Radio.Button>
-                            </Radio.Group>
-                        </Form.Item>
+                                <Form.Item
+                                    label="Transcription Type"
+                                    required
+                                >
+                                    <Radio.Group
+                                        value={transcriptionType}
+                                        onChange={(e) => {
+                                            setTranscriptionType(e.target.value);
+                                            setIsStreaming(false);
+                                            cleanupLiveStreaming();
+                                        }}
+                                    >
+                                        <Radio.Button value="manual_notes">Manual Notes Only</Radio.Button>
+                                        <Radio.Button value="manual_transcript">Manual Transcript</Radio.Button>
+                                        <Radio.Button value="assembly_ai">Live Audio Streaming</Radio.Button>
+                                    </Radio.Group>
+                                </Form.Item>
+                            </>
+                        )}
 
                         {transcriptionType === "assembly_ai" && (
                             <Button
@@ -1038,7 +1047,7 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
                         )}
 
                         {isStreaming && (
-                            <Card style={{ marginBottom: 16, backgroundColor: "#f6ffed" }} size="small">
+                            <Card style={{ marginBottom: 16, backgroundColor: token.colorSuccessBg, borderColor: token.colorSuccessBorder }} size="small">
                                 <Typography.Text strong>🎙️ Streaming Active</Typography.Text>
                                 <TextArea
                                     value={streamingTranscript}
@@ -1123,60 +1132,69 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
                             </Card>
                         )}
 
-                        <Card size="small" type="inner" title="Meeting Summary">
-                            <Space orientation="vertical" size="small" style={{ width: "100%" }}>
-                                <TextArea
-                                    value={meetingSummaryDraft}
-                                    onChange={(e) => setMeetingSummaryDraft(e.target.value)}
-                                    rows={5}
-                                    placeholder="Generate with AI or write a summary manually"
-                                />
-                                <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
-                                    <Button
-                                        onClick={handleGenerateMeetingSummary}
-                                        loading={generateSummaryMutation.isPending}
-                                    >
-                                        {viewMeeting.summary ? "Regenerate with AI" : "Generate with AI"}
-                                    </Button>
-                                    {meetingSummaryDraft.trim().length > 0 &&
-                                        meetingSummaryDraft.trim() !== (viewMeeting.summary ?? "").trim() && (
-                                            <Button
-                                                type="primary"
-                                                onClick={handleSaveMeetingSummary}
-                                                loading={updateMeetingSummaryMutation.isPending}
-                                            >
-                                                Save Summary
-                                            </Button>
-                                        )}
-                                </Flex>
+                        <Collapse
+                            size="small"
+                            items={[
+                                {
+                                    key: "meeting-summary",
+                                    label: "Meeting Summary",
+                                    children: (
+                                        <Space orientation="vertical" size="small" style={{ width: "100%" }}>
+                                            <TextArea
+                                                value={meetingSummaryDraft}
+                                                onChange={(e) => setMeetingSummaryDraft(e.target.value)}
+                                                rows={5}
+                                                placeholder="Generate with AI or write a summary manually"
+                                            />
+                                            <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+                                                <Button
+                                                    onClick={handleGenerateMeetingSummary}
+                                                    loading={generateSummaryMutation.isPending}
+                                                >
+                                                    {viewMeeting.summary ? "Regenerate with AI" : "Generate with AI"}
+                                                </Button>
+                                                {meetingSummaryDraft.trim().length > 0 &&
+                                                    meetingSummaryDraft.trim() !== (viewMeeting.summary ?? "").trim() && (
+                                                        <Button
+                                                            type="primary"
+                                                            onClick={handleSaveMeetingSummary}
+                                                            loading={updateMeetingSummaryMutation.isPending}
+                                                        >
+                                                            Save Summary
+                                                        </Button>
+                                                    )}
+                                            </Flex>
 
-                                <Typography.Text strong>Meeting Analysis</Typography.Text>
-                                <TextArea
-                                    value={meetingAnalysisDraft}
-                                    onChange={(e) => setMeetingAnalysisDraft(e.target.value)}
-                                    rows={6}
-                                    placeholder="Generate AI analysis using proposal context, stakeholders, and meeting summary"
-                                />
-                                <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
-                                    <Button
-                                        onClick={handleGenerateMeetingAnalysis}
-                                        loading={generateMeetingAnalysisMutation.isPending}
-                                    >
-                                        {viewMeeting.meetingAnalysis ? "Regenerate Analysis with AI" : "Generate Analysis with AI"}
-                                    </Button>
-                                    {meetingAnalysisDraft.trim().length > 0 &&
-                                        meetingAnalysisDraft.trim() !== (viewMeeting.meetingAnalysis ?? "").trim() && (
-                                            <Button
-                                                type="primary"
-                                                onClick={handleSaveMeetingAnalysis}
-                                                loading={updateMeetingAnalysisMutation.isPending}
-                                            >
-                                                Save Analysis
-                                            </Button>
-                                        )}
-                                </Flex>
-                            </Space>
-                        </Card>
+                                            <Typography.Text strong>Meeting Analysis</Typography.Text>
+                                            <TextArea
+                                                value={meetingAnalysisDraft}
+                                                onChange={(e) => setMeetingAnalysisDraft(e.target.value)}
+                                                rows={6}
+                                                placeholder="Generate AI analysis using proposal context, stakeholders, and meeting summary"
+                                            />
+                                            <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+                                                <Button
+                                                    onClick={handleGenerateMeetingAnalysis}
+                                                    loading={generateMeetingAnalysisMutation.isPending}
+                                                >
+                                                    {viewMeeting.meetingAnalysis ? "Regenerate Analysis with AI" : "Generate Analysis with AI"}
+                                                </Button>
+                                                {meetingAnalysisDraft.trim().length > 0 &&
+                                                    meetingAnalysisDraft.trim() !== (viewMeeting.meetingAnalysis ?? "").trim() && (
+                                                        <Button
+                                                            type="primary"
+                                                            onClick={handleSaveMeetingAnalysis}
+                                                            loading={updateMeetingAnalysisMutation.isPending}
+                                                        >
+                                                            Save Analysis
+                                                        </Button>
+                                                    )}
+                                            </Flex>
+                                        </Space>
+                                    ),
+                                },
+                            ]}
+                        />
 
                         <Collapse
                             size="small"

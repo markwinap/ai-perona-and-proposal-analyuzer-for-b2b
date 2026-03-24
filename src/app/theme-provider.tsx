@@ -1,6 +1,6 @@
 "use client";
 
-import { ConfigProvider } from "antd";
+import { App, ConfigProvider } from "antd";
 import { useEffect, useState, createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import { Space_Grotesk } from "next/font/google";
@@ -112,7 +112,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       <ConfigProvider theme={themeConfig}>
-        {children}
+        <App>
+          {children}
+        </App>
       </ConfigProvider>
     </ThemeContext.Provider>
   );
