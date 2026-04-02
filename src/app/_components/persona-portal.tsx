@@ -43,6 +43,7 @@ import {
 } from "./persona-portal.helpers";
 import { ReadAloudButton, SpeakableTextArea as TextArea, stopSpeakableAudioPlayback } from "./speakable-text-area";
 import { SearchSelect } from "./search-select";
+import { AuthIconButton } from "~/app/_components/auth-icon-button";
 import { ProposalMeetingNotes } from "~/app/_components/proposal-meeting-notes";
 import { ThemeToggle } from "~/app/theme-toggle";
 import { api } from "~/trpc/react";
@@ -601,6 +602,7 @@ export function PersonaPortal() {
             <Link href="/admin">
               <Button>Prompt Admin</Button>
             </Link>
+            <AuthIconButton />
             <ThemeToggle />
           </Space>
         </div>

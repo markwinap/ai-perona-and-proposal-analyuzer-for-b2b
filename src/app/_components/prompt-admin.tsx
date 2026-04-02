@@ -21,6 +21,7 @@ import {
 } from "antd";
 import Link from "next/link";
 
+import { AuthIconButton } from "~/app/_components/auth-icon-button";
 import { SpeakableTextArea as TextArea } from "./speakable-text-area";
 import { stopSpeakableAudioPlayback } from "./speakable-text-area";
 import { ThemeToggle } from "~/app/theme-toggle";
@@ -146,6 +147,7 @@ export function PromptAdmin() {
             <Link href="/">
               <Button>← Back to Portal</Button>
             </Link>
+            <AuthIconButton />
             <ThemeToggle />
           </Space>
         </div>

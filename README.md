@@ -162,3 +162,24 @@ src/
 ├── trpc/                   # tRPC client setup (React Query integration)
 └── styles/                 # Global CSS
 ```
+
+
+## DB Migration
+
+```sh
+npm run db:migrate
+npm run db:push
+```
+
+### Back Up Local DB
+```sh
+$env:PGPASSWORD="your_local_postgres_password"
+pg_dump -h localhost -U postgres -d persona_analizer_ts -F c -f .\backup_persona.dump
+```
+
+
+### Restore DB
+```sh
+$env:PGPASSWORD="your_neon_password"
+pg_restore --no-owner --no-privileges -h ep-xxxx.us-east-2.aws.neon.tech -U your_neon_user -d persona_analizer_ts .\backup_persona.dump
+```
