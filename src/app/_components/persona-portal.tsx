@@ -41,7 +41,7 @@ import {
   recommendationPreview,
   shouldCloseEditor,
 } from "./persona-portal.helpers";
-import { SpeakableTextArea as TextArea } from "./speakable-text-area";
+import { ReadAloudButton, SpeakableTextArea as TextArea, stopSpeakableAudioPlayback } from "./speakable-text-area";
 import { SearchSelect } from "./search-select";
 import { ProposalMeetingNotes } from "~/app/_components/proposal-meeting-notes";
 import { ThemeToggle } from "~/app/theme-toggle";
@@ -108,6 +108,54 @@ export function PersonaPortal() {
   const utils = api.useUtils();
   const screens = useBreakpoint();
   const chatLastMessageRef = useRef<HTMLDivElement | null>(null);
+  const previousModalVisibilityRef = useRef<boolean[] | null>(null);
+
+  useEffect(() => {
+    const modalVisibilityFlags = [
+      showCreateCompany,
+      showCreatePersona,
+      showCreateProposal,
+      editingCompanyId !== null,
+      editingPersonaId !== null,
+      editingProposalId !== null,
+      communicationModalPersonaId !== null,
+      communicationModalPersonaId !== null && showAddCommunicationModal,
+      analyzePersonaModalId !== null,
+      stakeholderModalProposalId !== null,
+      rfpAnalysisModalProposalId !== null,
+      showManualEvaluation,
+      chatModalProposalId !== null,
+      proposalDetailsModalId !== null,
+      generateCommModalProposalId !== null,
+    ];
+
+    const previousFlags = previousModalVisibilityRef.current;
+    const closedAnyModal =
+      previousFlags !== null &&
+      previousFlags.some((wasOpen, index) => wasOpen && !modalVisibilityFlags[index]);
+
+    if (closedAnyModal) {
+      stopSpeakableAudioPlayback();
+    }
+
+    previousModalVisibilityRef.current = modalVisibilityFlags;
+  }, [
+    showCreateCompany,
+    showCreatePersona,
+    showCreateProposal,
+    editingCompanyId,
+    editingPersonaId,
+    editingProposalId,
+    communicationModalPersonaId,
+    showAddCommunicationModal,
+    analyzePersonaModalId,
+    stakeholderModalProposalId,
+    rfpAnalysisModalProposalId,
+    showManualEvaluation,
+    chatModalProposalId,
+    proposalDetailsModalId,
+    generateCommModalProposalId,
+  ]);
 
   const companiesQuery = api.company.list.useQuery();
   const personasQuery = api.persona.list.useQuery();
@@ -1598,61 +1646,74 @@ export function PersonaPortal() {
                   expandable={{
                     expandedRowRender: (row) => (
                       <Space orientation="vertical" size="small" style={{ width: "100%" }}>
-                        <Space.Compact size="small">
-                          <Button
-                            size="small"
-                            type={proposalAnalysisViewModes[row.id] === "original" ? "primary" : "default"}
-                            onClick={() =>
-                              setProposalAnalysisViewModes((current) => ({
-                                ...current,
-                                [row.id]: "original",
-                              }))
-                            }
-                          >
-                            Show Original
-                          </Button>
-                          <Button
-                            size="small"
-                            type={proposalAnalysisViewModes[row.id] === "translated" ? "primary" : "default"}
-                            loading={translateProposalAnalysisMutation.isPending && translatingProposalEvaluationId === row.id}
-                            onClick={() => {
-                              if (translatedProposalAnalyses[row.id]) {
+                        <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+                          <Space.Compact size="small">
+                            <Button
+                              size="small"
+                              type={proposalAnalysisViewModes[row.id] === "original" ? "primary" : "default"}
+                              onClick={() =>
                                 setProposalAnalysisViewModes((current) => ({
                                   ...current,
-                                  [row.id]: "translated",
-                                }));
-                                return;
+                                  [row.id]: "original",
+                                }))
                               }
-
-                              setTranslatingProposalEvaluationId(row.id);
-                              translateProposalAnalysisMutation.mutate(
-                                {
-                                  analysis: buildProposalAnalysisTranslationSource({
-                                    successSignals: row.successSignals,
-                                    failureSignals: row.failureSignals,
-                                    recommendation: row.recommendation,
-                                  }),
-                                },
-                                {
-                                  onSuccess: (result) => {
-                                    setTranslatedProposalAnalyses((current) => ({
-                                      ...current,
-                                      [row.id]: result.translatedAnalysis,
-                                    }));
-                                    setProposalAnalysisViewModes((current) => ({
-                                      ...current,
-                                      [row.id]: "translated",
-                                    }));
-                                    messageApi.success("Proposal analysis translated to Spanish (LatAm)");
-                                  },
-                                  onSettled: () => setTranslatingProposalEvaluationId(null),
+                            >
+                              Show Original
+                            </Button>
+                            <Button
+                              size="small"
+                              type={proposalAnalysisViewModes[row.id] === "translated" ? "primary" : "default"}
+                              loading={translateProposalAnalysisMutation.isPending && translatingProposalEvaluationId === row.id}
+                              onClick={() => {
+                                if (translatedProposalAnalyses[row.id]) {
+                                  setProposalAnalysisViewModes((current) => ({
+                                    ...current,
+                                    [row.id]: "translated",
+                                  }));
+                                  return;
                                 }
-                              );
-                            }}
-                          >
-                            Show Translation
-                          </Button>
-                        </Space.Compact>
+
+                                setTranslatingProposalEvaluationId(row.id);
+                                translateProposalAnalysisMutation.mutate(
+                                  {
+                                    analysis: buildProposalAnalysisTranslationSource({
+                                      successSignals: row.successSignals,
+                                      failureSignals: row.failureSignals,
+                                      recommendation: row.recommendation,
+                                    }),
+                                  },
+                                  {
+                                    onSuccess: (result) => {
+                                      setTranslatedProposalAnalyses((current) => ({
+                                        ...current,
+                                        [row.id]: result.translatedAnalysis,
+                                      }));
+                                      setProposalAnalysisViewModes((current) => ({
+                                        ...current,
+                                        [row.id]: "translated",
+                                      }));
+                                      messageApi.success("Proposal analysis translated to Spanish (LatAm)");
+                                    },
+                                    onSettled: () => setTranslatingProposalEvaluationId(null),
+                                  }
+                                );
+                              }}
+                            >
+                              Show Translation
+                            </Button>
+                          </Space.Compact>
+                          <ReadAloudButton
+                            text={
+                              proposalAnalysisViewModes[row.id] === "translated" && translatedProposalAnalyses[row.id]
+                                ? translatedProposalAnalyses[row.id]
+                                : buildProposalAnalysisTranslationSource({
+                                  successSignals: row.successSignals,
+                                  failureSignals: row.failureSignals,
+                                  recommendation: row.recommendation,
+                                })
+                            }
+                          />
+                        </Flex>
                         {proposalAnalysisViewModes[row.id] === "translated" && translatedProposalAnalyses[row.id] ? (
                           <>
                             <Typography.Text strong>Español LATAM</Typography.Text>
@@ -1872,9 +1933,12 @@ export function PersonaPortal() {
                       >
                         <Card size="small" type="inner">
                           <Space orientation="vertical" size={4} style={{ width: "100%" }}>
-                            <Tag color={msg.role === "assistant" ? "blue" : "green"}>
-                              {msg.role === "assistant" ? "Assistant" : "You"}
-                            </Tag>
+                            <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+                              <Tag color={msg.role === "assistant" ? "blue" : "green"}>
+                                {msg.role === "assistant" ? "Assistant" : "You"}
+                              </Tag>
+                              <ReadAloudButton text={msg.content} />
+                            </Flex>
                             <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
                               {msg.content}
                             </Typography.Paragraph>

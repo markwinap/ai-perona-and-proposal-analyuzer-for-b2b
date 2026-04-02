@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Badge,
@@ -22,6 +22,7 @@ import {
 import Link from "next/link";
 
 import { SpeakableTextArea as TextArea } from "./speakable-text-area";
+import { stopSpeakableAudioPlayback } from "./speakable-text-area";
 import { ThemeToggle } from "~/app/theme-toggle";
 import { api } from "~/trpc/react";
 
@@ -54,6 +55,7 @@ const KEY_LABELS: Record<string, string> = {
 export function PromptAdmin() {
   const [messageApi, contextHolder] = message.useMessage();
   const [editingPrompt, setEditingPrompt] = useState<PromptEntry | null>(null);
+  const previousModalOpenRef = useRef(false);
   const [form] = Form.useForm<{
     name: string;
     description: string;
@@ -107,6 +109,15 @@ export function PromptAdmin() {
       });
     });
   };
+
+  useEffect(() => {
+    const isModalOpen = Boolean(editingPrompt);
+    if (previousModalOpenRef.current && !isModalOpen) {
+      stopSpeakableAudioPlayback();
+    }
+
+    previousModalOpenRef.current = isModalOpen;
+  }, [editingPrompt]);
 
   return (
     <div style={{ minHeight: "100vh", padding: "0 0 48px" }}>

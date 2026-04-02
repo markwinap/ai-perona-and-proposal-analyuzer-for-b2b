@@ -23,7 +23,9 @@ import {
 import { AudioOutlined, CopyOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
 
 import { api } from "~/trpc/react";
+import { ReadAloudButton } from "./speakable-text-area";
 import { SpeakableTextArea as TextArea } from "./speakable-text-area";
+import { stopSpeakableAudioPlayback } from "./speakable-text-area";
 
 interface ProposalMeeting {
     id: number;
@@ -106,6 +108,21 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
     const scriptNodeRef = useRef<ScriptProcessorNode | null>(null);
     const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
     const liveLinesRef = useRef<string[]>([]);
+    const previousModalVisibilityRef = useRef<boolean[] | null>(null);
+
+    useEffect(() => {
+        const modalVisibilityFlags = [showCreateMeeting, Boolean(viewMeeting)];
+        const previousFlags = previousModalVisibilityRef.current;
+        const closedAnyModal =
+            previousFlags !== null &&
+            previousFlags.some((wasOpen, index) => wasOpen && !modalVisibilityFlags[index]);
+
+        if (closedAnyModal) {
+            stopSpeakableAudioPlayback();
+        }
+
+        previousModalVisibilityRef.current = modalVisibilityFlags;
+    }, [showCreateMeeting, viewMeeting]);
 
     const meetingNotesQuery = api.proposal.getMeetingNotes.useQuery(
         proposalId > 0 ? { proposalId } : undefined,
@@ -802,6 +819,9 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
                                                                     {meeting.summary}
                                                                 </Typography.Paragraph>
                                                             </Card>
+                                                            <Flex justify="end" style={{ marginTop: 8 }}>
+                                                                <ReadAloudButton text={meeting.summary} />
+                                                            </Flex>
                                                             <Button
                                                                 type="text"
                                                                 size="small"
@@ -830,11 +850,16 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
                                                             </Button>
                                                         )}
                                                         {meeting.nextSteps ? (
-                                                            <Card size="small" style={{ marginTop: 8 }} type="inner">
-                                                                <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
-                                                                    {meeting.nextSteps}
-                                                                </Typography.Paragraph>
-                                                            </Card>
+                                                            <>
+                                                                <Card size="small" style={{ marginTop: 8 }} type="inner">
+                                                                    <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                                                                        {meeting.nextSteps}
+                                                                    </Typography.Paragraph>
+                                                                </Card>
+                                                                <Flex justify="end" style={{ marginTop: 8 }}>
+                                                                    <ReadAloudButton text={meeting.nextSteps} />
+                                                                </Flex>
+                                                            </>
                                                         ) : (
                                                             <Typography.Text type="secondary" style={{ display: "block", marginTop: 8 }}>
                                                                 No recommended next steps yet.
