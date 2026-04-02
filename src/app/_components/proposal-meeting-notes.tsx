@@ -23,8 +23,7 @@ import {
 import { AudioOutlined, CopyOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
 
 import { api } from "~/trpc/react";
-
-const { TextArea } = Input;
+import { SpeakableTextArea as TextArea } from "./speakable-text-area";
 
 interface ProposalMeeting {
     id: number;

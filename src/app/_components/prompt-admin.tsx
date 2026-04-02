@@ -21,10 +21,9 @@ import {
 } from "antd";
 import Link from "next/link";
 
+import { SpeakableTextArea as TextArea } from "./speakable-text-area";
 import { ThemeToggle } from "~/app/theme-toggle";
 import { api } from "~/trpc/react";
-
-const { TextArea } = Input;
 
 type PromptEntry = {
   id: number | null;

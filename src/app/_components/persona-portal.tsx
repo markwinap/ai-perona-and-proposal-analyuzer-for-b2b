@@ -41,13 +41,12 @@ import {
   recommendationPreview,
   shouldCloseEditor,
 } from "./persona-portal.helpers";
+import { SpeakableTextArea as TextArea } from "./speakable-text-area";
 import { SearchSelect } from "./search-select";
 import { ProposalMeetingNotes } from "~/app/_components/proposal-meeting-notes";
 import { ThemeToggle } from "~/app/theme-toggle";
 import { api } from "~/trpc/react";
 import Link from "next/link";
-
-const { TextArea } = Input;
 const { useBreakpoint } = Grid;
 
 const buildProposalAnalysisTranslationSource = (input: {
@@ -1230,8 +1229,8 @@ export function PersonaPortal() {
           sm: '80%',
           md: '70%',
           lg: '60%',
-          xl: '40%',
-          xxl: '40%',
+          xl: '60%',
+          xxl: '60%',
         }}
       >
         {editingPersona ? (

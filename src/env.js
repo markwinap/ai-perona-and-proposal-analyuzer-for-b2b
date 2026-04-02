@@ -19,6 +19,8 @@ export const env = createEnv({
     GOOGLE_GEMINI_API_KEY: z.string().optional(),
     GOOGLE_GEMINI_PROJECT_ID: z.string().optional(),
     GOOGLE_GEMINI_MODEL: z.string().optional(),
+    AWS_REGION: z.string().optional(),
+    AWS_POLLY_VOICE_ID: z.string().optional(),
     DATABASE_URL: z.string().url(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
@@ -48,6 +50,8 @@ export const env = createEnv({
     GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY,
     GOOGLE_GEMINI_PROJECT_ID: process.env.GOOGLE_GEMINI_PROJECT_ID,
     GOOGLE_GEMINI_MODEL: process.env.GOOGLE_GEMINI_MODEL,
+    AWS_REGION: process.env.AWS_REGION,
+    AWS_POLLY_VOICE_ID: process.env.AWS_POLLY_VOICE_ID,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
   },
