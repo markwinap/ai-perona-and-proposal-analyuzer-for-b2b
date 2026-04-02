@@ -14,7 +14,10 @@ export const metadata: Metadata = {
   title: "Persona Intelligence Portal",
   description:
     "Analyze personas, companies, and proposal outcomes to generate targeted business communications.",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  icons: [
+    { rel: "icon", type: "image/svg+xml", url: "/favicon.svg" },
+    { rel: "shortcut icon", url: "/favicon.ico" },
+  ],
 };
 
 const spaceGrotesk = Space_Grotesk({
