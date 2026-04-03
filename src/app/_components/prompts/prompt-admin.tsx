@@ -21,9 +21,10 @@ import {
 } from "antd";
 import Link from "next/link";
 
-import { AuthIconButton } from "~/app/_components/auth-icon-button";
-import { SpeakableTextArea as TextArea } from "./speakable-text-area";
-import { stopSpeakableAudioPlayback } from "./speakable-text-area";
+import { AuthIconButton } from "~/app/_components/shared/auth-icon-button";
+import { SpeakableTextArea as TextArea } from "~/app/_components/shared/speakable-text-area";
+import { stopSpeakableAudioPlayback } from "~/app/_components/shared/speakable-text-area";
+import { PageHeader } from "~/app/_components/shared/page-header";
 import { ThemeToggle } from "~/app/theme-toggle";
 import { api } from "~/trpc/react";
 
@@ -124,34 +125,19 @@ export function PromptAdmin() {
     <div style={{ minHeight: "100vh", padding: "0 0 48px" }}>
       {contextHolder}
 
-      <header className="hero-banner">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            width: "100%",
-          }}
-        >
-          <div className="hero-copy">
-            <Typography.Title level={1} className="hero-title">
-              Prompt Administration
-            </Typography.Title>
-            <Typography.Paragraph className="hero-description">
-              Manage the AI prompt templates used for persona analysis, RFP evaluation, and proposal
-              draft generation. Edits are stored in the database and take effect on the next AI
-              request.
-            </Typography.Paragraph>
-          </div>
-          <Space>
+      <PageHeader
+        title="Prompt Administration"
+        description="Manage the AI prompt templates used for persona analysis, RFP evaluation, and proposal draft generation. Edits are stored in the database and take effect on the next AI request."
+        actions={
+          <>
             <Link href="/">
               <Button>← Back to Portal</Button>
             </Link>
             <AuthIconButton />
             <ThemeToggle />
-          </Space>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <div style={{ padding: "24px 32px" }}>
         <Row gutter={[20, 20]}>

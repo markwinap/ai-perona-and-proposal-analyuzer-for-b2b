@@ -23,9 +23,9 @@ import {
 import { AudioOutlined, CopyOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
 
 import { api } from "~/trpc/react";
-import { ReadAloudButton } from "./speakable-text-area";
-import { SpeakableTextArea as TextArea } from "./speakable-text-area";
-import { stopSpeakableAudioPlayback } from "./speakable-text-area";
+import { ReadAloudButton } from "~/app/_components/shared/speakable-text-area";
+import { SpeakableTextArea as TextArea } from "~/app/_components/shared/speakable-text-area";
+import { stopSpeakableAudioPlayback } from "~/app/_components/shared/speakable-text-area";
 
 interface ProposalMeeting {
     id: number;
