@@ -17,6 +17,7 @@ import {
     Row,
     Select,
     Space,
+    Spin,
     Table,
     Tag,
     Typography,
@@ -377,6 +378,7 @@ export function ProposalsTab() {
                 <DataCard
                     title="Proposals"
                     dataSource={proposals}
+                    loading={proposalsQuery.isLoading}
                     columns={[
                         {
                             title: "Opportunity",
@@ -827,7 +829,7 @@ export function ProposalsTab() {
 
                         <Card size="small" title="Conversation">
                             {proposalChatQuery.isLoading ? (
-                                <Typography.Text type="secondary">Loading chat history...</Typography.Text>
+                                <Flex justify="center" style={{ padding: 24 }}><Spin /></Flex>
                             ) : chatMessages.length === 0 ? (
                                 <Typography.Text type="secondary">
                                     No chat history yet. Ask a question to start from the default context.
@@ -961,7 +963,7 @@ export function ProposalsTab() {
 
                     <Card size="small" type="inner" title={`Generated Messages (${proposalGeneratedMessages.length})`}>
                         {generatedMessagesQuery.isLoading ? (
-                            <Typography.Text type="secondary">Loading generated communications...</Typography.Text>
+                            <Flex justify="center" style={{ padding: 24 }}><Spin /></Flex>
                         ) : proposalGeneratedMessages.length === 0 ? (
                             <Empty description="No generated communications for this proposal yet." />
                         ) : (
@@ -974,11 +976,14 @@ export function ProposalsTab() {
                                     const isDuplicating =
                                         duplicateGeneratedCommunicationMutation.isPending &&
                                         duplicateGeneratedCommunicationMutation.variables?.generatedCommunicationId === item.id;
+                                    const hasChanges = isSelected &&
+                                        generatedCommunicationDraft.trim() &&
+                                        generatedCommunicationDraft.trim() !== item.generatedMessage.trim();
 
                                     return (
                                         <Card key={item.id} size="small" style={{ borderColor: isSelected ? "#1677ff" : undefined }}>
-                                            <Flex justify="space-between" align="start" gap={12} wrap="wrap">
-                                                <Space orientation="vertical" size={2}>
+                                            <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+                                                <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
                                                     <Space size={8} wrap>
                                                         <Tag color="blue">{item.stakeholderRole}</Tag>
                                                         {item.persona ? <Tag>{item.persona.fullName}</Tag> : null}
@@ -986,80 +991,84 @@ export function ProposalsTab() {
                                                             {new Date(item.createdAt).toLocaleString()}
                                                         </Typography.Text>
                                                     </Space>
+                                                    <Space size="small" wrap>
+                                                        {isSelected ? (
+                                                            <>
+                                                                <Button size="small" onClick={() => setSelectedGeneratedCommunicationId(item.id)}>
+                                                                    Edit
+                                                                </Button>
+                                                                {hasChanges && (
+                                                                    <Button size="small" onClick={() => {
+                                                                        setSelectedGeneratedCommunicationId(null);
+                                                                        setGeneratedCommunicationDraft("");
+                                                                    }}>
+                                                                        Cancel
+                                                                    </Button>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <Button size="small" onClick={() => setSelectedGeneratedCommunicationId(item.id)}>
+                                                                Edit
+                                                            </Button>
+                                                        )}
+                                                        <Button
+                                                            size="small"
+                                                            onClick={() => duplicateGeneratedCommunicationMutation.mutate({ generatedCommunicationId: item.id })}
+                                                            loading={isDuplicating}
+                                                        >
+                                                            Duplicate
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            danger
+                                                            onClick={() => {
+                                                                modal.confirm({
+                                                                    title: "Delete Generated Communication",
+                                                                    content: "This saved generated communication will be permanently removed.",
+                                                                    okText: "Delete",
+                                                                    okType: "danger",
+                                                                    cancelText: "Cancel",
+                                                                    onOk() {
+                                                                        deleteGeneratedCommunicationMutation.mutate({ generatedCommunicationId: item.id });
+                                                                    },
+                                                                });
+                                                            }}
+                                                            loading={isDeleting}
+                                                        >
+                                                            Delete
+                                                        </Button>
+                                                        {hasChanges && (
+                                                            <Button
+                                                                size="small"
+                                                                type="primary"
+                                                                onClick={() => {
+                                                                    updateGeneratedCommunicationMutation.mutate({
+                                                                        generatedCommunicationId: item.id,
+                                                                        generatedMessage: generatedCommunicationDraft.trim(),
+                                                                    });
+                                                                }}
+                                                                loading={updateGeneratedCommunicationMutation.isPending}
+                                                            >
+                                                                Save Changes
+                                                            </Button>
+                                                        )}
+                                                    </Space>
+                                                </Flex>
+                                                {isSelected ? (
+                                                    <TextArea
+                                                        value={generatedCommunicationDraft}
+                                                        onChange={(event) => setGeneratedCommunicationDraft(event.target.value)}
+                                                        autoSize={{ minRows: 4, maxRows: 14 }}
+                                                    />
+                                                ) : (
                                                     <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
                                                         {item.generatedMessage}
                                                     </Typography.Paragraph>
-                                                </Space>
-                                                <Space size="small" wrap>
-                                                    <Button size="small" onClick={() => setSelectedGeneratedCommunicationId(item.id)}>
-                                                        {isSelected ? "Editing" : "Edit"}
-                                                    </Button>
-                                                    <Button
-                                                        size="small"
-                                                        onClick={() => duplicateGeneratedCommunicationMutation.mutate({ generatedCommunicationId: item.id })}
-                                                        loading={isDuplicating}
-                                                    >
-                                                        Duplicate
-                                                    </Button>
-                                                    <Button
-                                                        size="small"
-                                                        danger
-                                                        onClick={() => {
-                                                            modal.confirm({
-                                                                title: "Delete Generated Communication",
-                                                                content: "This saved generated communication will be permanently removed.",
-                                                                okText: "Delete",
-                                                                okType: "danger",
-                                                                cancelText: "Cancel",
-                                                                onOk() {
-                                                                    deleteGeneratedCommunicationMutation.mutate({ generatedCommunicationId: item.id });
-                                                                },
-                                                            });
-                                                        }}
-                                                        loading={isDeleting}
-                                                    >
-                                                        Delete
-                                                    </Button>
-                                                </Space>
-                                            </Flex>
+                                                )}
+                                            </Space>
                                         </Card>
                                     );
                                 })}
-
-                                {selectedGeneratedCommunication ? (
-                                    <Card size="small" title="Edit Communication">
-                                        <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
-                                            <TextArea
-                                                value={generatedCommunicationDraft}
-                                                onChange={(event) => setGeneratedCommunicationDraft(event.target.value)}
-                                                rows={8}
-                                                placeholder="Edit the generated communication"
-                                            />
-                                            <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
-                                                <Typography.Text type="secondary">
-                                                    Update the saved generated message for this proposal.
-                                                </Typography.Text>
-                                                <Button
-                                                    type="primary"
-                                                    onClick={() => {
-                                                        if (!selectedGeneratedCommunication || !generatedCommunicationDraft.trim()) return;
-                                                        updateGeneratedCommunicationMutation.mutate({
-                                                            generatedCommunicationId: selectedGeneratedCommunication.id,
-                                                            generatedMessage: generatedCommunicationDraft.trim(),
-                                                        });
-                                                    }}
-                                                    loading={updateGeneratedCommunicationMutation.isPending}
-                                                    disabled={
-                                                        !generatedCommunicationDraft.trim() ||
-                                                        generatedCommunicationDraft.trim() === selectedGeneratedCommunication.generatedMessage.trim()
-                                                    }
-                                                >
-                                                    Save Changes
-                                                </Button>
-                                            </Flex>
-                                        </Space>
-                                    </Card>
-                                ) : null}
                             </Space>
                         )}
                     </Card>

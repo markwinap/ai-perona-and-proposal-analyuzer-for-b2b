@@ -162,7 +162,6 @@ export function PersonasTab() {
     const closeCommunicationModal = () => {
         setShowAddCommunicationModal(false);
         setCommunicationModalPersonaId(null);
-        communicationForm.resetFields();
     };
 
     const closeAddCommunicationModal = () => {
@@ -191,6 +190,7 @@ export function PersonasTab() {
                 <DataCard
                     title="Personas"
                     dataSource={personas}
+                    loading={personasQuery.isLoading}
                     columns={[
                         {
                             title: "Persona",

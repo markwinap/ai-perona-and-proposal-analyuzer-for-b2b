@@ -101,6 +101,7 @@ export function CompaniesTab() {
                 <DataCard
                     title="Companies"
                     dataSource={companies}
+                    loading={companiesQuery.isLoading}
                     columns={[
                         { title: "Name", dataIndex: "name" },
                         { title: "Industry", dataIndex: "industry" },

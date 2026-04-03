@@ -22,6 +22,7 @@ import {
 } from "antd";
 import { AudioOutlined, CopyOutlined, DeleteOutlined, StopOutlined } from "@ant-design/icons";
 
+import ReactMarkdown from "react-markdown";
 import { api } from "~/trpc/react";
 import { ReadAloudButton } from "~/app/_components/shared/speakable-text-area";
 import { SpeakableTextArea as TextArea } from "~/app/_components/shared/speakable-text-area";
@@ -815,9 +816,7 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
                                                     children: (
                                                         <div>
                                                             <Card size="small" style={{ marginTop: 4 }} type="inner">
-                                                                <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
-                                                                    {meeting.summary}
-                                                                </Typography.Paragraph>
+                                                                <ReactMarkdown>{meeting.summary}</ReactMarkdown>
                                                             </Card>
                                                             <Flex justify="end" style={{ marginTop: 8 }}>
                                                                 <ReadAloudButton text={meeting.summary} />
@@ -852,9 +851,7 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
                                                         {meeting.nextSteps ? (
                                                             <>
                                                                 <Card size="small" style={{ marginTop: 8 }} type="inner">
-                                                                    <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
-                                                                        {meeting.nextSteps}
-                                                                    </Typography.Paragraph>
+                                                                    <ReactMarkdown>{meeting.nextSteps}</ReactMarkdown>
                                                                 </Card>
                                                                 <Flex justify="end" style={{ marginTop: 8 }}>
                                                                     <ReadAloudButton text={meeting.nextSteps} />
