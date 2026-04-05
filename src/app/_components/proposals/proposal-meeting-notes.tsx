@@ -27,6 +27,7 @@ import { api } from "~/trpc/react";
 import { ReadAloudButton } from "~/app/_components/shared/speakable-text-area";
 import { SpeakableTextArea as TextArea } from "~/app/_components/shared/speakable-text-area";
 import { stopSpeakableAudioPlayback } from "~/app/_components/shared/speakable-text-area";
+import { useModalTour } from "~/app/_components/hooks/use-modal-tour";
 
 interface ProposalMeeting {
     id: number;
@@ -102,6 +103,18 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
     const { token } = theme.useToken();
     const { modal } = App.useApp();
     const [messageApi, contextHolder] = message.useMessage();
+
+    const createMeetingTour = useModalTour([
+        { title: "Meeting Title & Description", description: "Provide a descriptive title and optional context for the meeting note." },
+        { title: "Transcription Type", description: "Choose between manual notes, a pasted transcript, or live audio streaming via AssemblyAI." },
+        { title: "Live Streaming", description: "When using live audio, the mic streams to AssemblyAI for real-time speaker-diarized transcription." },
+    ]);
+
+    const viewMeetingTour = useModalTour([
+        { title: "Transcript & Summary", description: "View the raw transcript and expand 'Meeting Summary' to read or edit the AI-generated summary and analysis." },
+        { title: "Speaker Management", description: "Expand 'Speakers' to rename speakers or link them to proposal stakeholders." },
+        { title: "Transcription Segments", description: "Expand 'Transcription Segments' to review individual speaker turns in chronological order." },
+    ]);
 
     const wsRef = useRef<WebSocket | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -876,7 +889,12 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
 
             <Modal
                 open={showCreateMeeting}
-                title={selectedMeetingId ? "Add Speakers & Transcript" : "Add Meeting Note"}
+                title={
+                    <Flex align="center" gap={4}>
+                        <span>{selectedMeetingId ? "Add Speakers & Transcript" : "Add Meeting Note"}</span>
+                        <createMeetingTour.HelpButton />
+                    </Flex>
+                }
                 onCancel={() => {
                     setShowCreateMeeting(false);
                     if (selectedMeetingId) {
@@ -1134,7 +1152,12 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
 
             <Modal
                 open={Boolean(viewMeeting)}
-                title={viewMeeting ? `Meeting Content: ${viewMeeting.title}` : "Meeting Content"}
+                title={
+                    <Flex align="center" gap={4}>
+                        <span>{viewMeeting ? `Meeting Content: ${viewMeeting.title}` : "Meeting Content"}</span>
+                        <viewMeetingTour.HelpButton />
+                    </Flex>
+                }
                 onCancel={() => setViewMeeting(null)}
                 footer={
                     <Button onClick={() => setViewMeeting(null)}>
@@ -1368,6 +1391,9 @@ export function ProposalMeetingNotes({ proposalId, proposal }: MeetingNotesProps
                     </Space>
                 )}
             </Modal>
+
+            <createMeetingTour.TourOverlay />
+            <viewMeetingTour.TourOverlay />
         </div>
     );
 }

@@ -37,6 +37,7 @@ import { ReadAloudButton, SpeakableTextArea as TextArea } from "~/app/_component
 import { SearchSelect } from "~/app/_components/shared/search-select";
 import { ProposalMeetingNotes } from "~/app/_components/proposals/proposal-meeting-notes";
 import { useModalAudioCleanup } from "~/app/_components/hooks/use-modal-audio-cleanup";
+import { useModalTour } from "~/app/_components/hooks/use-modal-tour";
 import { MODAL_WIDTH_NARROW, MODAL_WIDTH_WIDE, MODAL_WIDTH_EXTRA_WIDE } from "~/app/_components/shared/modal-widths";
 import { SectionHeader } from "~/app/_components/shared/section-header";
 import { DataCard } from "~/app/_components/shared/data-card";
@@ -144,6 +145,46 @@ export function ProposalsTab() {
         proposalDetailsModalId !== null,
         generateCommModalProposalId !== null,
     ], [showCreateProposal, editingProposalId, stakeholderModalProposalId, rfpAnalysisModalProposalId, showManualEvaluation, chatModalProposalId, proposalDetailsModalId, generateCommModalProposalId]));
+
+    const createProposalTour = useModalTour([
+        { title: "Company & Title", description: "Select the target company and give the proposal a descriptive title." },
+        { title: "Summary & Signals", description: "Provide an executive summary, intent signals from the customer, and technology fit notes to feed AI analysis." },
+    ]);
+
+    const editProposalTour = useModalTour([
+        { title: "Update Proposal Details", description: "Modify the proposal title, summary, intent signals, or technology fit. Changes propagate to future AI evaluations." },
+    ]);
+
+    const stakeholderTour = useModalTour([
+        { title: "Persona & Role", description: "Select which persona is a stakeholder on this proposal and assign their role (decision-maker, influencer, etc.)." },
+        { title: "Influence & Notes", description: "Rate the stakeholder's influence level (1-5) and add optional context notes." },
+    ]);
+
+    const rfpAnalysisTour = useModalTour([
+        { title: "AI RFP Analysis", description: "Run an AI analysis to score proposal success and failure signals, or add a manual evaluation." },
+        { title: "Analysis History", description: "Expand any evaluation row to see success/failure signals, recommendations, and translation options." },
+        { title: "Generate Proposal", description: "Use 'Generate Proposal' on any evaluation to create a new proposal draft from the recommendation." },
+    ]);
+
+    const manualEvaluationTour = useModalTour([
+        { title: "Signals & Scores", description: "Describe success and failure signals, then assign numeric scores (0-100) for success likelihood and failure risk." },
+        { title: "Recommendation", description: "Provide a strategic recommendation that can later be used to auto-generate a full proposal draft." },
+    ]);
+
+    const chatTour = useModalTour([
+        { title: "Proposal Chat", description: "Chat with an AI assistant that has full context about this proposal, its stakeholders, and company." },
+        { title: "Default Context", description: "Expand 'Default Context' to see the background information the AI uses for every response." },
+        { title: "Send Messages", description: "Type a question and press Enter to send. Use Shift+Enter for newlines. Delete history to start fresh." },
+    ]);
+
+    const meetingNotesTour = useModalTour([
+        { title: "Meeting Notes", description: "View and manage meeting notes associated with this proposal. Add new notes, speakers, and AI-generated summaries." },
+    ]);
+
+    const communicationsTour = useModalTour([
+        { title: "Generate Communication", description: "Select a stakeholder role and optional persona to generate a tailored proposal communication." },
+        { title: "Message Library", description: "Edit, duplicate, or delete generated messages. Click 'Save Changes' after editing to persist updates." },
+    ]);
 
     // Mutations
     const createMutation = api.proposal.create.useMutation({
@@ -480,6 +521,7 @@ export function ProposalsTab() {
                 okText="Save Proposal"
                 confirmLoading={createMutation.isPending}
                 width={MODAL_WIDTH_NARROW}
+                extra={<createProposalTour.HelpButton />}
             >
                 <Row gutter={12}>
                     <Col xs={24} md={8}>
@@ -506,7 +548,7 @@ export function ProposalsTab() {
 
             <FormModal
                 open={!!editingProposal}
-                title={editingProposal ? `Edit Proposal: ${editingProposal.title}` : "Edit Proposal"}
+                title="Edit Proposal"
                 onCancel={closeEditor}
                 form={editForm}
                 onFinish={(values) => {
@@ -516,11 +558,8 @@ export function ProposalsTab() {
                 okText="Update Proposal"
                 confirmLoading={updateMutation.isPending}
                 width={MODAL_WIDTH_NARROW}
-                subtitle={
-                    editingProposal ? (
-                        <Typography.Text type="secondary">Company: {editingProposal.company.name}</Typography.Text>
-                    ) : null
-                }
+                subtitle={editingProposal ? `${editingProposal.title} · ${editingProposal.company.name}` : null}
+                extra={<editProposalTour.HelpButton />}
             >
                 <Form.Item name="title" label="Proposal Title" rules={[{ required: true, message: "Title is required" }]}>
                     <Input />
@@ -538,13 +577,15 @@ export function ProposalsTab() {
 
             <FormModal
                 open={stakeholderModalProposalId !== null}
-                title={stakeholderModalProposal ? `Link Stakeholder: ${stakeholderModalProposal.title}` : "Link Stakeholder"}
+                title="Link Stakeholder"
                 onCancel={() => { setStakeholderModalProposalId(null); stakeholderForm.resetFields(); }}
                 form={stakeholderForm}
                 onFinish={(values) => stakeholderMutation.mutate({ proposalId: stakeholderModalProposalId!, ...values })}
                 okText="Save Stakeholder Link"
                 confirmLoading={stakeholderMutation.isPending}
                 width={MODAL_WIDTH_NARROW}
+                subtitle={stakeholderModalProposal?.title}
+                extra={<stakeholderTour.HelpButton />}
             >
                 <Row gutter={12}>
                     <Col xs={24} md={12}>
@@ -575,7 +616,12 @@ export function ProposalsTab() {
             {/* AI RFP Analysis Modal */}
             <Modal
                 open={rfpAnalysisModalProposalId !== null}
-                title={`AI RFP Analysis: ${rfpModalProposal?.title ?? ""}`}
+                title={
+                    <Flex align="center" gap={4}>
+                        <span>{`AI RFP Analysis: ${rfpModalProposal?.title ?? ""}`}</span>
+                        <rfpAnalysisTour.HelpButton />
+                    </Flex>
+                }
                 onCancel={closeRfpModal}
                 footer={<Button onClick={closeRfpModal}>Close</Button>}
                 centered
@@ -743,7 +789,7 @@ export function ProposalsTab() {
 
             <FormModal
                 open={showManualEvaluation && rfpModalProposal !== null}
-                title={rfpModalProposal ? `Manual Evaluation: ${rfpModalProposal.title}` : "Manual Evaluation"}
+                title="Manual Evaluation"
                 onCancel={() => setShowManualEvaluation(false)}
                 form={evaluationForm}
                 onFinish={(values) => {
@@ -753,6 +799,8 @@ export function ProposalsTab() {
                 okText="Save Evaluation"
                 confirmLoading={evaluationMutation.isPending}
                 width={MODAL_WIDTH_NARROW}
+                subtitle={rfpModalProposal?.title}
+                extra={<manualEvaluationTour.HelpButton />}
             >
                 <Form.Item name="successSignals" label="Success Signals">
                     <TextArea autoSize={{ minRows: 2 }} placeholder="Budget approval, architectural sponsorship" />
@@ -780,7 +828,12 @@ export function ProposalsTab() {
             {/* Chat Modal */}
             <Modal
                 open={chatModalProposalId !== null}
-                title={chatModalProposal ? `Proposal Chat: ${chatModalProposal.title}` : "Proposal Chat"}
+                title={
+                    <Flex align="center" gap={4}>
+                        <span>{chatModalProposal ? `Proposal Chat: ${chatModalProposal.title}` : "Proposal Chat"}</span>
+                        <chatTour.HelpButton />
+                    </Flex>
+                }
                 onCancel={() => { setChatModalProposalId(null); setChatDraft(""); }}
                 footer={
                     <Flex justify="end" gap="small" style={{ width: "100%" }}>
@@ -903,7 +956,12 @@ export function ProposalsTab() {
             {/* Proposal Details / Meeting Notes Modal */}
             <Modal
                 open={proposalDetailsModalId !== null}
-                title={proposalDetailsModalProposal ? `${proposalDetailsModalProposal.title} - Meeting Notes` : "Proposal Details"}
+                title={
+                    <Flex align="center" gap={4}>
+                        <span>{proposalDetailsModalProposal ? `${proposalDetailsModalProposal.title} - Meeting Notes` : "Proposal Details"}</span>
+                        <meetingNotesTour.HelpButton />
+                    </Flex>
+                }
                 onCancel={() => setProposalDetailsModalId(null)}
                 footer={<Button onClick={() => setProposalDetailsModalId(null)}>Close</Button>}
                 centered
@@ -920,7 +978,12 @@ export function ProposalsTab() {
             {/* Generated Communications Modal */}
             <Modal
                 open={generateCommModalProposalId !== null}
-                title={generateCommModalProposal ? `${generateCommModalProposal.title} - Communications` : "Communications"}
+                title={
+                    <Flex align="center" gap={4}>
+                        <span>{generateCommModalProposal ? `${generateCommModalProposal.title} - Communications` : "Communications"}</span>
+                        <communicationsTour.HelpButton />
+                    </Flex>
+                }
                 onCancel={() => setGenerateCommModalProposalId(null)}
                 footer={<Button onClick={() => setGenerateCommModalProposalId(null)}>Close</Button>}
                 centered
@@ -1074,6 +1137,15 @@ export function ProposalsTab() {
                     </Card>
                 </Space>
             </Modal>
+
+            <createProposalTour.TourOverlay />
+            <editProposalTour.TourOverlay />
+            <stakeholderTour.TourOverlay />
+            <rfpAnalysisTour.TourOverlay />
+            <manualEvaluationTour.TourOverlay />
+            <chatTour.TourOverlay />
+            <meetingNotesTour.TourOverlay />
+            <communicationsTour.TourOverlay />
         </>
     );
 }

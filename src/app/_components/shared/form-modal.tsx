@@ -1,6 +1,6 @@
 "use client";
 
-import { Modal, Form } from "antd";
+import { Flex, Modal, Form, Typography } from "antd";
 import type { FormInstance } from "antd";
 import type { ReactNode } from "react";
 
@@ -15,6 +15,8 @@ interface FormModalProps {
     width?: Record<string, string>;
     centered?: boolean;
     subtitle?: ReactNode;
+    /** Extra element rendered to the right of the modal title (e.g. a help button). */
+    extra?: ReactNode;
     children: ReactNode;
 }
 
@@ -29,12 +31,25 @@ export function FormModal({
     width,
     centered = true,
     subtitle,
+    extra,
     children,
 }: FormModalProps) {
     return (
         <Modal
             open={open}
-            title={title}
+            title={
+                <div>
+                    <Flex align="center" gap={4}>
+                        <span>{title}</span>
+                        {extra}
+                    </Flex>
+                    {subtitle && (
+                        <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+                            {subtitle}
+                        </Typography.Text>
+                    )}
+                </div>
+            }
             onCancel={onCancel}
             onOk={() => form.submit()}
             okText={okText}
@@ -42,8 +57,7 @@ export function FormModal({
             centered={centered}
             width={width}
         >
-            {subtitle}
-            <Form form={form} layout="vertical" onFinish={onFinish} style={subtitle ? { marginTop: 12 } : undefined}>
+            <Form form={form} layout="vertical" onFinish={onFinish}>
                 {children}
             </Form>
         </Modal>

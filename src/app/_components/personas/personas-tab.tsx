@@ -29,6 +29,7 @@ import {
 import { ReadAloudButton, SpeakableTextArea as TextArea } from "~/app/_components/shared/speakable-text-area";
 import { SearchSelect } from "~/app/_components/shared/search-select";
 import { useModalAudioCleanup } from "~/app/_components/hooks/use-modal-audio-cleanup";
+import { useModalTour } from "~/app/_components/hooks/use-modal-tour";
 import { MODAL_WIDTH_NARROW, MODAL_WIDTH_MEDIUM } from "~/app/_components/shared/modal-widths";
 import { SectionHeader } from "~/app/_components/shared/section-header";
 import { DataCard } from "~/app/_components/shared/data-card";
@@ -75,6 +76,32 @@ export function PersonasTab() {
         communicationModalPersonaId !== null && showAddCommunicationModal,
         analyzePersonaModalId !== null,
     ], [showCreatePersona, editingPersonaId, communicationModalPersonaId, showAddCommunicationModal, analyzePersonaModalId]));
+
+    const createPersonaTour = useModalTour([
+        { title: "Company & Identity", description: "Select the parent company and provide the persona's full name and optional email address." },
+        { title: "Role & Personality", description: "Describe the persona's job scope, personality traits, and communication preferences to improve AI-generated insights." },
+        { title: "Past Experiences", description: "Document previous projects and outcomes so proposal analyses can reference relevant history." },
+    ]);
+
+    const editPersonaTour = useModalTour([
+        { title: "Update Identity", description: "Modify the persona's name, email, or profile fields. Changes propagate to all linked proposals and analyses." },
+        { title: "Personality & Preferences", description: "Refine personality summaries and preferences to sharpen AI-driven communication recommendations." },
+    ]);
+
+    const communicationsTour = useModalTour([
+        { title: "Communication History", description: "View all recorded interactions with this persona — emails, calls, meetings, and notes." },
+        { title: "Add Communication", description: "Click 'Add Communication' to log a new interaction that feeds into persona analysis and proposal scoring." },
+    ]);
+
+    const addCommunicationTour = useModalTour([
+        { title: "Communication Type", description: "Select the kind of interaction — email, call, meeting, or other." },
+        { title: "Subject & Content", description: "Provide a subject line and paste the full communication content. This data powers AI persona insights." },
+    ]);
+
+    const analyzePersonaTour = useModalTour([
+        { title: "AI Persona Analysis", description: "View the AI-generated behavioral profile and communication recommendations for this persona." },
+        { title: "Translation & Regeneration", description: "Translate the analysis to Spanish (LatAm) or regenerate it with the latest data using the footer actions." },
+    ]);
 
     const createMutation = api.persona.create.useMutation({
         onSuccess: async () => {
@@ -231,6 +258,7 @@ export function PersonasTab() {
                 okText="Save Persona"
                 confirmLoading={createMutation.isPending}
                 width={MODAL_WIDTH_NARROW}
+                extra={<createPersonaTour.HelpButton />}
             >
                 <Row gutter={12}>
                     <Col xs={24} md={8}>
@@ -265,7 +293,7 @@ export function PersonasTab() {
 
             <FormModal
                 open={!!editingPersona}
-                title={editingPersona ? `Edit Persona: ${editingPersona.fullName}` : "Edit Persona"}
+                title="Edit Persona"
                 onCancel={closeEditor}
                 form={editForm}
                 onFinish={(values) => {
@@ -275,11 +303,8 @@ export function PersonasTab() {
                 okText="Update Persona"
                 confirmLoading={updateMutation.isPending}
                 width={PERSONA_EDIT_WIDTH}
-                subtitle={
-                    editingPersona ? (
-                        <Typography.Text type="secondary">Company: {editingPersona.company.name}</Typography.Text>
-                    ) : null
-                }
+                subtitle={editingPersona ? `${editingPersona.fullName} · ${editingPersona.company.name}` : null}
+                extra={<editPersonaTour.HelpButton />}
             >
                 <Row gutter={12}>
                     <Col xs={24} md={12}>
@@ -311,9 +336,12 @@ export function PersonasTab() {
             <Modal
                 open={communicationModalPersona !== null}
                 title={
-                    communicationModalPersona
-                        ? `Communications: ${communicationModalPersona.fullName}`
-                        : "Communications"
+                    <Flex align="center" gap={4}>
+                        <span>{communicationModalPersona
+                            ? `Communications: ${communicationModalPersona.fullName}`
+                            : "Communications"}</span>
+                        <communicationsTour.HelpButton />
+                    </Flex>
                 }
                 onCancel={closeCommunicationModal}
                 footer={<Button onClick={closeCommunicationModal}>Close</Button>}
@@ -353,11 +381,7 @@ export function PersonasTab() {
 
             <FormModal
                 open={communicationModalPersona !== null && showAddCommunicationModal}
-                title={
-                    communicationModalPersona
-                        ? `Add Communication: ${communicationModalPersona.fullName}`
-                        : "Add Communication"
-                }
+                title="Add Communication"
                 onCancel={closeAddCommunicationModal}
                 form={communicationForm}
                 onFinish={(values) => {
@@ -371,13 +395,8 @@ export function PersonasTab() {
                 okText="Save Communication"
                 confirmLoading={communicationMutation.isPending}
                 width={MODAL_WIDTH_NARROW}
-                subtitle={
-                    communicationModalPersona ? (
-                        <Typography.Text type="secondary">
-                            Company: {communicationModalPersona.company.name}
-                        </Typography.Text>
-                    ) : null
-                }
+                subtitle={communicationModalPersona ? `${communicationModalPersona.fullName} · ${communicationModalPersona.company.name}` : null}
+                extra={<addCommunicationTour.HelpButton />}
             >
                 <Form.Item name="type" label="Type" rules={[{ required: true }]}>
                     <Select options={COMMUNICATION_TYPE_OPTIONS} />
@@ -393,7 +412,12 @@ export function PersonasTab() {
             {/* Analyze Persona Modal */}
             <Modal
                 open={analyzePersonaModalId !== null}
-                title={analyzePersona ? `Analyze Persona: ${analyzePersona.fullName}` : "Analyze Persona"}
+                title={
+                    <Flex align="center" gap={4}>
+                        <span>{analyzePersona ? `Analyze Persona: ${analyzePersona.fullName}` : "Analyze Persona"}</span>
+                        <analyzePersonaTour.HelpButton />
+                    </Flex>
+                }
                 onCancel={closeAnalyzeModal}
                 width={MODAL_WIDTH_MEDIUM}
                 centered
@@ -465,6 +489,12 @@ export function PersonasTab() {
                     </Typography.Paragraph>
                 )}
             </Modal>
+
+            <createPersonaTour.TourOverlay />
+            <editPersonaTour.TourOverlay />
+            <communicationsTour.TourOverlay />
+            <addCommunicationTour.TourOverlay />
+            <analyzePersonaTour.TourOverlay />
         </>
     );
 }

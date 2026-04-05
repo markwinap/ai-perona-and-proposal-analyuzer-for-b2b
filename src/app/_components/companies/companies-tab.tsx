@@ -17,6 +17,7 @@ import {
 } from "~/app/_components/shared/persona-portal.helpers";
 import { SpeakableTextArea as TextArea } from "~/app/_components/shared/speakable-text-area";
 import { useModalAudioCleanup } from "~/app/_components/hooks/use-modal-audio-cleanup";
+import { useModalTour } from "~/app/_components/hooks/use-modal-tour";
 import { MODAL_WIDTH_NARROW } from "~/app/_components/shared/modal-widths";
 import { SectionHeader } from "~/app/_components/shared/section-header";
 import { DataCard } from "~/app/_components/shared/data-card";
@@ -59,6 +60,17 @@ export function CompaniesTab() {
     });
 
     const editingCompany = companies.find((c) => c.id === editingCompanyId) ?? null;
+
+    const createCompanyTour = useModalTour([
+        { title: "Company Name & Industry", description: "Enter the company's legal name and primary industry vertical." },
+        { title: "Business & Technology Intent", description: "Describe strategic goals and technology adoption plans. These fields feed into AI persona and proposal analyses." },
+        { title: "Stacks, Certs & Standards", description: "List development stacks, regulatory certifications, compliance standards, partnerships, reference architectures, and engineering guidelines — comma-separated." },
+    ]);
+
+    const editCompanyTour = useModalTour([
+        { title: "Update Company Profile", description: "Modify any company field. Changes are reflected across all linked personas and proposal AI analyses." },
+        { title: "Comma-Separated Lists", description: "Fields like stacks, certifications, and partnerships accept comma-separated values. Add or remove entries as needed." },
+    ]);
 
     const openEditor = (company: (typeof companies)[number]) => {
         setEditingCompanyId(company.id);
@@ -134,6 +146,7 @@ export function CompaniesTab() {
                 okText="Save Company"
                 confirmLoading={createMutation.isPending}
                 width={MODAL_WIDTH_NARROW}
+                extra={<createCompanyTour.HelpButton />}
             >
                 <Row gutter={12}>
                     <Col xs={24} md={12}>
@@ -175,7 +188,7 @@ export function CompaniesTab() {
 
             <FormModal
                 open={!!editingCompany}
-                title={editingCompany ? `Edit Company: ${editingCompany.name}` : "Edit Company"}
+                title="Edit Company"
                 onCancel={closeEditor}
                 form={editForm}
                 onFinish={(values) => {
@@ -185,6 +198,8 @@ export function CompaniesTab() {
                 okText="Update Company"
                 confirmLoading={updateMutation.isPending}
                 width={MODAL_WIDTH_NARROW}
+                subtitle={editingCompany?.name}
+                extra={<editCompanyTour.HelpButton />}
             >
                 <Row gutter={12}>
                     <Col xs={24} md={12}>
@@ -223,6 +238,9 @@ export function CompaniesTab() {
                     <Input />
                 </Form.Item>
             </FormModal>
+
+            <createCompanyTour.TourOverlay />
+            <editCompanyTour.TourOverlay />
         </>
     );
 }

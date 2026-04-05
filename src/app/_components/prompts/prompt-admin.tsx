@@ -24,6 +24,7 @@ import Link from "next/link";
 import { AuthIconButton } from "~/app/_components/shared/auth-icon-button";
 import { SpeakableTextArea as TextArea } from "~/app/_components/shared/speakable-text-area";
 import { stopSpeakableAudioPlayback } from "~/app/_components/shared/speakable-text-area";
+import { useModalTour } from "~/app/_components/hooks/use-modal-tour";
 import { PageHeader } from "~/app/_components/shared/page-header";
 import { ThemeToggle } from "~/app/theme-toggle";
 import { api } from "~/trpc/react";
@@ -66,6 +67,12 @@ export function PromptAdmin() {
   }>();
 
   const { data: prompts = [], refetch, isLoading } = api.prompt.list.useQuery();
+
+  const editPromptTour = useModalTour([
+    { title: "Name & Description", description: "Set a display name and description for this prompt template." },
+    { title: "System Instruction", description: "Define the system-level instruction sent to the AI model before the prompt. Leave blank for none." },
+    { title: "Prompt Template", description: "Edit the main prompt template. Use placeholders like {{CONTEXT}} or {{FULL_DATA}} to inject runtime data." },
+  ]);
 
   const upsert = api.prompt.upsert.useMutation({
     onSuccess: async () => {
@@ -229,7 +236,12 @@ export function PromptAdmin() {
 
       <Modal
         open={!!editingPrompt}
-        title={`Edit Prompt — ${editingPrompt ? (KEY_LABELS[editingPrompt.key] ?? editingPrompt.name) : ""}`}
+        title={
+          <Flex align="center" gap={4}>
+            <span>{`Edit Prompt — ${editingPrompt ? (KEY_LABELS[editingPrompt.key] ?? editingPrompt.name) : ""}`}</span>
+            <editPromptTour.HelpButton />
+          </Flex>
+        }
         width={860}
         onCancel={() => setEditingPrompt(null)}
         footer={
@@ -275,6 +287,8 @@ export function PromptAdmin() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <editPromptTour.TourOverlay />
     </div>
   );
 }

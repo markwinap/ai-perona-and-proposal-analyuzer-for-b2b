@@ -19,7 +19,7 @@ The **Persona Intelligence Portal** centralizes the human and organizational con
 
 ---
 
-## Product Features
+## Project Features
 
 ### Company Intelligence
 - Create and manage company accounts with industry, business intent, and technology intent fields.
@@ -67,6 +67,12 @@ The **Persona Intelligence Portal** centralizes the human and organizational con
 - Inline-edit any message and save changes back to the database.
 - Duplicate a message as a starting point for a new variant.
 - Delete messages that are no longer needed.
+
+### Prompt Administration
+- Manage AI prompt templates for persona analysis, RFP analysis, and proposal draft generation.
+- Edit prompt metadata, system instruction, and template text from an admin screen.
+- Reset customized prompts back to built-in defaults.
+- Store prompt customizations in the database so updates apply to subsequent AI requests.
 
 ### Translation
 - Translate persona analyses and proposal evaluation outputs to **Latin American Spanish** using Google Gemini.
@@ -152,15 +158,20 @@ pnpm db:studio         # Open Drizzle Studio to browse the database
 ```
 src/
 ├── app/
-│   ├── _components/        # Persona Intelligence Portal UI (single-page app shell)
-│   └── api/                # Next.js route handlers (tRPC, NextAuth)
+│   ├── _components/        # Portal UI modules (companies, personas, proposals, prompts, shared)
+│   ├── admin/              # Prompt administration page
+│   ├── api/                # Next.js route handlers (tRPC + NextAuth)
+│   ├── layout.tsx          # Root app layout
+│   └── page.tsx            # Main Persona Portal page
 ├── server/
-│   ├── api/routers/        # tRPC routers: company, persona, proposal, ai-provider, prompt
+│   ├── api/routers/        # tRPC routers: ai-provider, company, persona, post, prompt, proposal
+│   ├── auth/               # Auth configuration and helpers
 │   ├── db/                 # Drizzle schema and database client
 │   └── services/           # AI services: persona analysis, proposal analysis,
-│                           #   meeting notes, proposal chat, translation
-├── trpc/                   # tRPC client setup (React Query integration)
-└── styles/                 # Global CSS
+│                           #   meeting notes, proposal chat, prompt defaults
+├── trpc/                   # tRPC client/server wiring for React Query
+├── styles/                 # Global CSS
+└── env.js                  # Environment variable loading/validation
 ```
 
 
