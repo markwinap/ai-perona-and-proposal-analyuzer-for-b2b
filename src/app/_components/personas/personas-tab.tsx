@@ -257,7 +257,7 @@ export function PersonasTab() {
                 onFinish={(values) => createMutation.mutate(values)}
                 okText="Save Persona"
                 confirmLoading={createMutation.isPending}
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
                 extra={<createPersonaTour.HelpButton />}
             >
                 <Row gutter={12}>
@@ -346,7 +346,7 @@ export function PersonasTab() {
                 onCancel={closeCommunicationModal}
                 footer={<Button onClick={closeCommunicationModal}>Close</Button>}
                 centered
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
             >
                 {communicationModalPersona ? (
                     <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
@@ -394,7 +394,7 @@ export function PersonasTab() {
                 }}
                 okText="Save Communication"
                 confirmLoading={communicationMutation.isPending}
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
                 subtitle={communicationModalPersona ? `${communicationModalPersona.fullName} · ${communicationModalPersona.company.name}` : null}
                 extra={<addCommunicationTour.HelpButton />}
             >

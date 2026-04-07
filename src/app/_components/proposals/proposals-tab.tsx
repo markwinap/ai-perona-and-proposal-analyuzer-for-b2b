@@ -38,7 +38,7 @@ import { SearchSelect } from "~/app/_components/shared/search-select";
 import { ProposalMeetingNotes } from "~/app/_components/proposals/proposal-meeting-notes";
 import { useModalAudioCleanup } from "~/app/_components/hooks/use-modal-audio-cleanup";
 import { useModalTour } from "~/app/_components/hooks/use-modal-tour";
-import { MODAL_WIDTH_NARROW, MODAL_WIDTH_WIDE, MODAL_WIDTH_EXTRA_WIDE } from "~/app/_components/shared/modal-widths";
+import { MODAL_WIDTH_NARROW, MODAL_WIDTH_WIDE, MODAL_WIDTH_EXTRA_WIDE, MODAL_WIDTH_MEDIUM } from "~/app/_components/shared/modal-widths";
 import { SectionHeader } from "~/app/_components/shared/section-header";
 import { DataCard } from "~/app/_components/shared/data-card";
 import { FormModal } from "~/app/_components/shared/form-modal";
@@ -520,7 +520,7 @@ export function ProposalsTab() {
                 onFinish={(values) => createMutation.mutate(values)}
                 okText="Save Proposal"
                 confirmLoading={createMutation.isPending}
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
                 extra={<createProposalTour.HelpButton />}
             >
                 <Row gutter={12}>
@@ -557,7 +557,7 @@ export function ProposalsTab() {
                 }}
                 okText="Update Proposal"
                 confirmLoading={updateMutation.isPending}
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
                 subtitle={editingProposal ? `${editingProposal.title} · ${editingProposal.company.name}` : null}
                 extra={<editProposalTour.HelpButton />}
             >
@@ -583,7 +583,7 @@ export function ProposalsTab() {
                 onFinish={(values) => stakeholderMutation.mutate({ proposalId: stakeholderModalProposalId!, ...values })}
                 okText="Save Stakeholder Link"
                 confirmLoading={stakeholderMutation.isPending}
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
                 subtitle={stakeholderModalProposal?.title}
                 extra={<stakeholderTour.HelpButton />}
             >
@@ -625,7 +625,7 @@ export function ProposalsTab() {
                 onCancel={closeRfpModal}
                 footer={<Button onClick={closeRfpModal}>Close</Button>}
                 centered
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
             >
                 {rfpModalProposal ? (
                     <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
@@ -798,7 +798,7 @@ export function ProposalsTab() {
                 }}
                 okText="Save Evaluation"
                 confirmLoading={evaluationMutation.isPending}
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
                 subtitle={rfpModalProposal?.title}
                 extra={<manualEvaluationTour.HelpButton />}
             >

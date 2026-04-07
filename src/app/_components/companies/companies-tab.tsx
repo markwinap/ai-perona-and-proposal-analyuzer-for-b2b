@@ -18,7 +18,7 @@ import {
 import { SpeakableTextArea as TextArea } from "~/app/_components/shared/speakable-text-area";
 import { useModalAudioCleanup } from "~/app/_components/hooks/use-modal-audio-cleanup";
 import { useModalTour } from "~/app/_components/hooks/use-modal-tour";
-import { MODAL_WIDTH_NARROW } from "~/app/_components/shared/modal-widths";
+import { MODAL_WIDTH_MEDIUM } from "~/app/_components/shared/modal-widths";
 import { SectionHeader } from "~/app/_components/shared/section-header";
 import { DataCard } from "~/app/_components/shared/data-card";
 import { FormModal } from "~/app/_components/shared/form-modal";
@@ -145,7 +145,7 @@ export function CompaniesTab() {
                 onFinish={(values) => createMutation.mutate(values)}
                 okText="Save Company"
                 confirmLoading={createMutation.isPending}
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
                 extra={<createCompanyTour.HelpButton />}
             >
                 <Row gutter={12}>
@@ -197,7 +197,7 @@ export function CompaniesTab() {
                 }}
                 okText="Update Company"
                 confirmLoading={updateMutation.isPending}
-                width={MODAL_WIDTH_NARROW}
+                width={MODAL_WIDTH_MEDIUM}
                 subtitle={editingCompany?.name}
                 extra={<editCompanyTour.HelpButton />}
             >
