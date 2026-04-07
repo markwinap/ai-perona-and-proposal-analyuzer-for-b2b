@@ -1,5 +1,9 @@
 import { env } from "~/env";
+import { AI_GENERATION_CONFIG } from "./ai-config";
+import { summarizePersonaPromptContext } from "./context-summarizer";
+import { SYSTEM_INSTRUCTIONS } from "./prompt-fragments";
 import { applyTemplate, DEFAULT_PROMPTS } from "./prompt-defaults";
+import { withResponseCache } from "./response-cache";
 
 type PersonaAnalysisInput = {
   fullName: string;
@@ -177,6 +181,7 @@ const parseStructuredAnalysis = (raw: string): StructuredPersonaAnalysis | null 
 };
 
 const buildPrompt = (input: PersonaAnalysisInput, template?: string | null) => {
+  const summarizedContext = summarizePersonaPromptContext(input);
   const historySummary = {
     won: input.proposalHistory.filter((proposal) => proposal.outcome === "success")
       .length,
@@ -190,7 +195,7 @@ const buildPrompt = (input: PersonaAnalysisInput, template?: string | null) => {
 
   return applyTemplate(activeTemplate, {
     HISTORY_SUMMARY: JSON.stringify(historySummary, null, 2),
-    FULL_DATA: JSON.stringify(input, null, 2),
+    FULL_DATA: JSON.stringify(summarizedContext, null, 2),
   });
 };
 
@@ -198,63 +203,77 @@ export async function analyzePersonaWithAI(
   input: PersonaAnalysisInput,
   promptOverride?: { promptTemplate?: string | null; systemInstruction?: string | null }
 ) {
-  if (!env.GOOGLE_GEMINI_API_KEY) {
+  const apiKey = env.GOOGLE_GEMINI_API_KEY;
+  if (!apiKey) {
     return `${fallbackAnalysis(input)}\n\n[AI runtime note] Set GOOGLE_GEMINI_API_KEY (and optionally GOOGLE_GEMINI_MODEL) in .env to enable model-driven analysis.`;
   }
 
-  const model = env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GOOGLE_GEMINI_API_KEY)}`;
-
-  const systemInstruction =
-    promptOverride?.systemInstruction ??
-    DEFAULT_PROMPTS.persona_analysis.systemInstruction ??
-    "You are a senior B2B persona and proposal strategist. Produce evidence-based, practical recommendations. Return JSON only and do not include markdown code fences.";
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  return withResponseCache({
+    service: "persona-analysis",
+    input: {
+      input,
+      promptOverride,
+      model: env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash",
     },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: systemInstruction }],
-      },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: buildPrompt(input, promptOverride?.promptTemplate) }],
+    ttlSeconds: AI_GENERATION_CONFIG.CACHE_TTL_SECONDS.PERSONA_ANALYSIS,
+    compute: async () => {
+      const model = env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash";
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const systemInstruction =
+        promptOverride?.systemInstruction ??
+        DEFAULT_PROMPTS.persona_analysis.systemInstruction ??
+        SYSTEM_INSTRUCTIONS.B2B_PERSONA_STRATEGIST;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        topP: 0.9,
-        responseMimeType: "application/json",
-      },
-    }),
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemInstruction }],
+          },
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: buildPrompt(input, promptOverride?.promptTemplate) }],
+            },
+          ],
+          generationConfig: {
+            temperature: AI_GENERATION_CONFIG.TEMPERATURE.DETERMINISTIC,
+            topP: AI_GENERATION_CONFIG.TOP_P.BALANCED,
+            maxOutputTokens:
+              AI_GENERATION_CONFIG.MAX_OUTPUT_TOKENS.PERSONA_ANALYSIS,
+            responseMimeType: "application/json",
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`AI analysis request failed: ${response.status} ${errorBody}`);
+      }
+
+      const data = (await response.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+
+      const rawContent = data.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("\n")
+        .trim();
+
+      if (!rawContent) {
+        throw new Error("AI analysis returned an empty response.");
+      }
+
+      const structured = parseStructuredAnalysis(rawContent);
+      if (!structured) {
+        return rawContent;
+      }
+
+      return renderStructuredAnalysis(structured);
+    },
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`AI analysis request failed: ${response.status} ${errorBody}`);
-  }
-
-  const data = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-
-  const rawContent = data.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
-    .join("\n")
-    .trim();
-
-  if (!rawContent) {
-    throw new Error("AI analysis returned an empty response.");
-  }
-
-  const structured = parseStructuredAnalysis(rawContent);
-  if (!structured) {
-    return rawContent;
-  }
-
-  return renderStructuredAnalysis(structured);
 }

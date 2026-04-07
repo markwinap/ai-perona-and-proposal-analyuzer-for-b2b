@@ -1,4 +1,5 @@
 import { env } from "~/env";
+import { AI_GENERATION_CONFIG } from "./ai-config";
 
 const ASSEMBLY_AI_API_KEY = process.env.ASSEMBLY_AI_API_KEY;
 const ASSEMBLY_AI_URL = "https://api.assemblyai.com/v2";
@@ -35,8 +36,9 @@ async function generateTextWithAI(params: {
                 },
             ],
             generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 2000,
+                temperature: AI_GENERATION_CONFIG.TEMPERATURE.BALANCED,
+                topP: AI_GENERATION_CONFIG.TOP_P.BALANCED,
+                maxOutputTokens: AI_GENERATION_CONFIG.MAX_OUTPUT_TOKENS.MEETING_ANALYSIS,
             },
         }),
     });

@@ -1,4 +1,7 @@
 import { env } from "~/env";
+import { AI_GENERATION_CONFIG } from "./ai-config";
+import { SYSTEM_INSTRUCTIONS } from "./prompt-fragments";
+import { getCachedValue, setCachedValue } from "./response-cache";
 
 type ChatRole = "user" | "assistant";
 
@@ -87,10 +90,13 @@ export const buildProposalChatContext = (context: ProposalChatContext) => {
 const fallbackReply = (params: {
   defaultContext: string;
   userMessage: string;
+  serviceBusy?: boolean;
 }): string => {
   const contextPreview = params.defaultContext.split("\n").slice(0, 6).join("\n");
   return [
-    "I can help shape this proposal conversation from the selected context.",
+    params.serviceBusy
+      ? "The AI service is temporarily busy, so I generated a fallback response from local context."
+      : "I can help shape this proposal conversation from the selected context.",
     "",
     "Context snapshot:",
     contextPreview,
@@ -107,15 +113,28 @@ export async function generateProposalChatReply(params: {
   history: ChatMessage[];
   userMessage: string;
 }): Promise<string> {
-  if (!env.GOOGLE_GEMINI_API_KEY) {
+  const apiKey = env.GOOGLE_GEMINI_API_KEY;
+  if (!apiKey) {
     return fallbackReply({
       defaultContext: params.defaultContext,
       userMessage: params.userMessage,
     });
   }
 
+  const cacheInput = {
+    defaultContext: params.defaultContext,
+    history: params.history,
+    userMessage: params.userMessage,
+    model: env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash",
+  };
+
+  const cached = getCachedValue<string>("proposal-chat-reply", cacheInput);
+  if (cached !== null) {
+    return cached;
+  }
+
   const model = env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GOOGLE_GEMINI_API_KEY)}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   const contents = params.history.map((message) => ({
     role: message.role === "assistant" ? "model" : "user",
@@ -127,55 +146,82 @@ export async function generateProposalChatReply(params: {
     parts: [{ text: params.userMessage }],
   });
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const requestBody = JSON.stringify({
+    systemInstruction: {
+      parts: [
+        {
+          text: [
+            SYSTEM_INSTRUCTIONS.B2B_PROPOSAL_CHAT_ASSISTANT,
+            "",
+            "DEFAULT CONTEXT:",
+            params.defaultContext,
+          ].join("\n"),
+        },
+      ],
     },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [
-          {
-            text: [
-              "You are a senior B2B proposal conversation assistant.",
-              "Use only the provided proposal/company/stakeholder context and conversation history.",
-              "Give practical, concise guidance and clearly state assumptions.",
-              "Do not return markdown code fences.",
-              "",
-              "DEFAULT CONTEXT:",
-              params.defaultContext,
-            ].join("\n"),
-          },
-        ],
-      },
-      contents,
-      generationConfig: {
-        temperature: 0.3,
-        topP: 0.9,
-      },
-    }),
+    contents,
+    generationConfig: {
+      temperature: AI_GENERATION_CONFIG.TEMPERATURE.BALANCED,
+      topP: AI_GENERATION_CONFIG.TOP_P.BALANCED,
+      maxOutputTokens: AI_GENERATION_CONFIG.MAX_OUTPUT_TOKENS.CHAT_REPLY,
+    },
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Proposal chat request failed: ${response.status} ${errorBody}`);
+  const retryableStatusCodes = new Set([429, 500, 502, 503, 504]);
+  const maxAttempts = 3;
+  let lastStatus: number | null = null;
+  let rawText: string | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: requestBody,
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+
+        rawText = data.candidates?.[0]?.content?.parts
+          ?.map((part) => part.text ?? "")
+          .join("\n")
+          .trim() ?? null;
+        break;
+      }
+
+      lastStatus = response.status;
+      if (!retryableStatusCodes.has(response.status) || attempt === maxAttempts) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** (attempt - 1)));
+    } catch {
+      if (attempt === maxAttempts) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** (attempt - 1)));
+    }
   }
 
-  const data = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-
-  const raw = data.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
-    .join("\n")
-    .trim();
-
-  if (!raw) {
+  if (!rawText) {
     return fallbackReply({
       defaultContext: params.defaultContext,
       userMessage: params.userMessage,
+      serviceBusy: lastStatus === 429 || lastStatus === 503,
     });
   }
 
-  return raw;
+  setCachedValue(
+    "proposal-chat-reply",
+    cacheInput,
+    rawText,
+    AI_GENERATION_CONFIG.CACHE_TTL_SECONDS.PROPOSAL_CHAT_REPLY
+  );
+
+  return rawText;
 }

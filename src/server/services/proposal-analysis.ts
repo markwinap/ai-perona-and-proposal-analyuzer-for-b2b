@@ -1,5 +1,11 @@
 import { env } from "~/env";
+import { AI_GENERATION_CONFIG } from "./ai-config";
+import {
+  summarizeProposalDraftPromptContext,
+  summarizeRfpPromptContext,
+} from "./context-summarizer";
 import { applyTemplate, DEFAULT_PROMPTS } from "./prompt-defaults";
+import { withResponseCache } from "./response-cache";
 
 type RfpAnalysisInput = {
   proposal: {
@@ -164,9 +170,10 @@ const extractJsonObject = (text: string) => {
 };
 
 const buildPrompt = (input: RfpAnalysisInput, template?: string | null) => {
+  const summarizedContext = summarizeRfpPromptContext(input);
   const activeTemplate = template ?? DEFAULT_PROMPTS.rfp_analysis.promptTemplate;
   return applyTemplate(activeTemplate, {
-    CONTEXT: JSON.stringify(input, null, 2),
+    CONTEXT: JSON.stringify(summarizedContext, null, 2),
   });
 };
 
@@ -234,9 +241,10 @@ const fallbackGeneratedProposalDraft = (
 };
 
 const buildProposalDraftPrompt = (input: RecommendationProposalInput, template?: string | null) => {
+  const summarizedContext = summarizeProposalDraftPromptContext(input);
   const activeTemplate = template ?? DEFAULT_PROMPTS.proposal_draft.promptTemplate;
   return applyTemplate(activeTemplate, {
-    CONTEXT: JSON.stringify(input, null, 2),
+    CONTEXT: JSON.stringify(summarizedContext, null, 2),
   });
 };
 
@@ -244,182 +252,211 @@ export async function analyzeRfpProposalWithAI(
   input: RfpAnalysisInput,
   promptOverride?: { promptTemplate?: string | null }
 ): Promise<RfpAnalysisResult> {
-  if (!env.GOOGLE_GEMINI_API_KEY) {
+  const apiKey = env.GOOGLE_GEMINI_API_KEY;
+  if (!apiKey) {
     return fallbackRfpAnalysis(input);
   }
 
-  const model = env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GOOGLE_GEMINI_API_KEY)}`;
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  return withResponseCache({
+    service: "rfp-analysis",
+    input: {
+      input,
+      promptOverride,
+      model: env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash",
     },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: buildPrompt(input, promptOverride?.promptTemplate) }],
+    ttlSeconds: AI_GENERATION_CONFIG.CACHE_TTL_SECONDS.RFP_ANALYSIS,
+    compute: async () => {
+      const model = env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash";
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-      },
-    }),
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: buildPrompt(input, promptOverride?.promptTemplate) }],
+            },
+          ],
+          generationConfig: {
+            temperature: AI_GENERATION_CONFIG.TEMPERATURE.DETERMINISTIC,
+            topP: AI_GENERATION_CONFIG.TOP_P.PRECISE,
+            maxOutputTokens: AI_GENERATION_CONFIG.MAX_OUTPUT_TOKENS.RFP_ANALYSIS,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`RFP AI analysis request failed: ${response.status} ${errorBody}`);
+      }
+
+      const data = (await response.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+
+      const rawAnalysis = data.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("\n")
+        .trim();
+
+      if (!rawAnalysis) {
+        return fallbackRfpAnalysis(input);
+      }
+
+      const jsonText = extractJsonObject(rawAnalysis);
+      if (!jsonText) {
+        return {
+          ...fallbackRfpAnalysis(input),
+          rawAnalysis,
+        };
+      }
+
+      try {
+        const parsed = JSON.parse(jsonText) as {
+          successSignals?: unknown;
+          failureSignals?: unknown;
+          successScore?: unknown;
+          failureRiskScore?: unknown;
+          recommendation?: unknown;
+        };
+
+        return {
+          successSignals:
+            typeof parsed.successSignals === "string"
+              ? parsed.successSignals
+              : "No explicit success signals returned.",
+          failureSignals:
+            typeof parsed.failureSignals === "string"
+              ? parsed.failureSignals
+              : "No explicit failure signals returned.",
+          successScore: clampScore(parsed.successScore, 60),
+          failureRiskScore: clampScore(parsed.failureRiskScore, 40),
+          recommendation:
+            typeof parsed.recommendation === "string"
+              ? parsed.recommendation
+              : "No recommendation returned.",
+          rawAnalysis,
+        };
+      } catch {
+        return {
+          ...fallbackRfpAnalysis(input),
+          rawAnalysis,
+        };
+      }
+    },
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`RFP AI analysis request failed: ${response.status} ${errorBody}`);
-  }
-
-  const data = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-
-  const rawAnalysis = data.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
-    .join("\n")
-    .trim();
-
-  if (!rawAnalysis) {
-    return fallbackRfpAnalysis(input);
-  }
-
-  const jsonText = extractJsonObject(rawAnalysis);
-  if (!jsonText) {
-    return {
-      ...fallbackRfpAnalysis(input),
-      rawAnalysis,
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(jsonText) as {
-      successSignals?: unknown;
-      failureSignals?: unknown;
-      successScore?: unknown;
-      failureRiskScore?: unknown;
-      recommendation?: unknown;
-    };
-
-    return {
-      successSignals:
-        typeof parsed.successSignals === "string"
-          ? parsed.successSignals
-          : "No explicit success signals returned.",
-      failureSignals:
-        typeof parsed.failureSignals === "string"
-          ? parsed.failureSignals
-          : "No explicit failure signals returned.",
-      successScore: clampScore(parsed.successScore, 60),
-      failureRiskScore: clampScore(parsed.failureRiskScore, 40),
-      recommendation:
-        typeof parsed.recommendation === "string"
-          ? parsed.recommendation
-          : "No recommendation returned.",
-      rawAnalysis,
-    };
-  } catch {
-    return {
-      ...fallbackRfpAnalysis(input),
-      rawAnalysis,
-    };
-  }
 }
 
 export async function generateRfpProposalFromRecommendationWithAI(
   input: RecommendationProposalInput,
   promptOverride?: { promptTemplate?: string | null }
 ): Promise<GeneratedRfpProposalDraft> {
-  if (!env.GOOGLE_GEMINI_API_KEY) {
+  const apiKey = env.GOOGLE_GEMINI_API_KEY;
+  if (!apiKey) {
     return fallbackGeneratedProposalDraft(input);
   }
 
-  const model = env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GOOGLE_GEMINI_API_KEY)}`;
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  return withResponseCache({
+    service: "proposal-draft",
+    input: {
+      input,
+      promptOverride,
+      model: env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash",
     },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: buildProposalDraftPrompt(input, promptOverride?.promptTemplate) }],
+    ttlSeconds: AI_GENERATION_CONFIG.CACHE_TTL_SECONDS.PROPOSAL_DRAFT,
+    compute: async () => {
+      const model = env.GOOGLE_GEMINI_MODEL ?? "gemini-2.5-flash";
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ],
-      generationConfig: {
-        temperature: 0.2,
-      },
-    }),
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: buildProposalDraftPrompt(input, promptOverride?.promptTemplate) }],
+            },
+          ],
+          generationConfig: {
+            temperature: AI_GENERATION_CONFIG.TEMPERATURE.CREATIVE,
+            topP: AI_GENERATION_CONFIG.TOP_P.DIVERSE,
+            maxOutputTokens:
+              AI_GENERATION_CONFIG.MAX_OUTPUT_TOKENS.PROPOSAL_DRAFT,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Proposal draft generation failed: ${response.status} ${errorBody}`);
+      }
+
+      const data = (await response.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+
+      const rawDraft = data.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("\n")
+        .trim();
+
+      if (!rawDraft) {
+        return fallbackGeneratedProposalDraft(input);
+      }
+
+      const jsonText = extractJsonObject(rawDraft);
+      if (!jsonText) {
+        return {
+          ...fallbackGeneratedProposalDraft(input),
+          rawDraft,
+        };
+      }
+
+      try {
+        const parsed = JSON.parse(jsonText) as {
+          title?: unknown;
+          summary?: unknown;
+          intentSignals?: unknown;
+          technologyFit?: unknown;
+          rationale?: unknown;
+        };
+
+        const fallback = fallbackGeneratedProposalDraft(input);
+
+        return {
+          title: typeof parsed.title === "string" && parsed.title.trim().length > 3
+            ? parsed.title.trim()
+            : fallback.title,
+          summary: typeof parsed.summary === "string" && parsed.summary.trim().length > 3
+            ? parsed.summary.trim()
+            : fallback.summary,
+          intentSignals:
+            typeof parsed.intentSignals === "string" && parsed.intentSignals.trim().length > 3
+              ? parsed.intentSignals.trim()
+              : fallback.intentSignals,
+          technologyFit:
+            typeof parsed.technologyFit === "string" && parsed.technologyFit.trim().length > 3
+              ? parsed.technologyFit.trim()
+              : fallback.technologyFit,
+          rationale:
+            typeof parsed.rationale === "string" && parsed.rationale.trim().length > 3
+              ? parsed.rationale.trim()
+              : fallback.rationale,
+          rawDraft,
+        };
+      } catch {
+        return {
+          ...fallbackGeneratedProposalDraft(input),
+          rawDraft,
+        };
+      }
+    },
   });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Proposal draft generation failed: ${response.status} ${errorBody}`);
-  }
-
-  const data = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-
-  const rawDraft = data.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
-    .join("\n")
-    .trim();
-
-  if (!rawDraft) {
-    return fallbackGeneratedProposalDraft(input);
-  }
-
-  const jsonText = extractJsonObject(rawDraft);
-  if (!jsonText) {
-    return {
-      ...fallbackGeneratedProposalDraft(input),
-      rawDraft,
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(jsonText) as {
-      title?: unknown;
-      summary?: unknown;
-      intentSignals?: unknown;
-      technologyFit?: unknown;
-      rationale?: unknown;
-    };
-
-    const fallback = fallbackGeneratedProposalDraft(input);
-
-    return {
-      title: typeof parsed.title === "string" && parsed.title.trim().length > 3
-        ? parsed.title.trim()
-        : fallback.title,
-      summary: typeof parsed.summary === "string" && parsed.summary.trim().length > 3
-        ? parsed.summary.trim()
-        : fallback.summary,
-      intentSignals:
-        typeof parsed.intentSignals === "string" && parsed.intentSignals.trim().length > 3
-          ? parsed.intentSignals.trim()
-          : fallback.intentSignals,
-      technologyFit:
-        typeof parsed.technologyFit === "string" && parsed.technologyFit.trim().length > 3
-          ? parsed.technologyFit.trim()
-          : fallback.technologyFit,
-      rationale:
-        typeof parsed.rationale === "string" && parsed.rationale.trim().length > 3
-          ? parsed.rationale.trim()
-          : fallback.rationale,
-      rawDraft,
-    };
-  } catch {
-    return {
-      ...fallbackGeneratedProposalDraft(input),
-      rawDraft,
-    };
-  }
 }
