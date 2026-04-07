@@ -629,6 +629,86 @@ export const aiPrompts = createTable(
   (t) => [uniqueIndex("ai_prompt_key_unique_idx").on(t.key)]
 );
 
+export const aiPromptVersions = createTable(
+  "ai_prompt_version",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    promptId: d
+      .integer("prompt_id")
+      .notNull()
+      .references(() => aiPrompts.id, { onDelete: "cascade" }),
+    version: d.integer().notNull(),
+    promptTemplate: d.text("prompt_template").notNull(),
+    systemInstruction: d.text("system_instruction"),
+    changeNotes: d.text("change_notes"),
+    isActive: d.boolean("is_active").notNull().default(true),
+    createdAt: d
+      .timestamp("created_at", { withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex("ai_prompt_version_prompt_version_unique_idx").on(
+      t.promptId,
+      t.version
+    ),
+    index("ai_prompt_version_prompt_idx").on(t.promptId),
+  ]
+);
+
+export const cacheMetrics = createTable(
+  "cache_metric",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    service: d.varchar({ length: 100 }).notNull(),
+    inputHash: d.varchar("input_hash", { length: 64 }).notNull(),
+    hitCount: d.integer("hit_count").notNull().default(0),
+    missCount: d.integer("miss_count").notNull().default(0),
+    lastAccessedAt: d.timestamp("last_accessed_at", { withTimezone: true }),
+    createdAt: d
+      .timestamp("created_at", { withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    uniqueIndex("cache_metric_service_hash_unique_idx").on(t.service, t.inputHash),
+    index("cache_metric_service_idx").on(t.service),
+  ]
+);
+
+export const apiMetrics = createTable(
+  "api_metric",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    service: d.varchar({ length: 100 }).notNull(),
+    inputTokens: d.integer("input_tokens"),
+    outputTokens: d.integer("output_tokens"),
+    totalCost: d.numeric("total_cost", { precision: 10, scale: 6 }),
+    processingTimeMs: d.integer("processing_time_ms"),
+    wasCache: d.boolean("was_cache").notNull().default(false),
+    hadError: d.boolean("had_error").notNull().default(false),
+    createdAt: d
+      .timestamp("created_at", { withTimezone: true })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    index("api_metric_service_idx").on(t.service),
+    index("api_metric_created_idx").on(t.createdAt),
+  ]
+);
+
+export const aiPromptsRelations = relations(aiPrompts, ({ many }) => ({
+  versions: many(aiPromptVersions),
+}));
+
+export const aiPromptVersionsRelations = relations(aiPromptVersions, ({ one }) => ({
+  prompt: one(aiPrompts, {
+    fields: [aiPromptVersions.promptId],
+    references: [aiPrompts.id],
+  }),
+}));
+
 export const accounts = createTable(
   "account",
   (d) => ({

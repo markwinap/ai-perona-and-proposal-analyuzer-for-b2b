@@ -1,5 +1,6 @@
 import { env } from "~/env";
 import { AI_GENERATION_CONFIG } from "./ai-config";
+import { recordApiMetric } from "./ai-metrics";
 import { SYSTEM_INSTRUCTIONS } from "./prompt-fragments";
 import { getCachedValue, setCachedValue } from "./response-cache";
 
@@ -113,8 +114,15 @@ export async function generateProposalChatReply(params: {
   history: ChatMessage[];
   userMessage: string;
 }): Promise<string> {
+  const startedAt = Date.now();
   const apiKey = env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) {
+    void recordApiMetric({
+      service: "proposal-chat-reply",
+      wasCache: false,
+      hadError: false,
+      processingTimeMs: Date.now() - startedAt,
+    });
     return fallbackReply({
       defaultContext: params.defaultContext,
       userMessage: params.userMessage,
@@ -130,6 +138,12 @@ export async function generateProposalChatReply(params: {
 
   const cached = getCachedValue<string>("proposal-chat-reply", cacheInput);
   if (cached !== null) {
+    void recordApiMetric({
+      service: "proposal-chat-reply",
+      wasCache: true,
+      hadError: false,
+      processingTimeMs: Date.now() - startedAt,
+    });
     return cached;
   }
 
@@ -209,6 +223,12 @@ export async function generateProposalChatReply(params: {
   }
 
   if (!rawText) {
+    void recordApiMetric({
+      service: "proposal-chat-reply",
+      wasCache: false,
+      hadError: true,
+      processingTimeMs: Date.now() - startedAt,
+    });
     return fallbackReply({
       defaultContext: params.defaultContext,
       userMessage: params.userMessage,
@@ -222,6 +242,13 @@ export async function generateProposalChatReply(params: {
     rawText,
     AI_GENERATION_CONFIG.CACHE_TTL_SECONDS.PROPOSAL_CHAT_REPLY
   );
+
+  void recordApiMetric({
+    service: "proposal-chat-reply",
+    wasCache: false,
+    hadError: false,
+    processingTimeMs: Date.now() - startedAt,
+  });
 
   return rawText;
 }

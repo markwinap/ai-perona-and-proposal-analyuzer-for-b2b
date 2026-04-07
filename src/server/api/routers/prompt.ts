@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-import { aiPrompts } from "~/server/db/schema";
+import { recordPromptVersionSnapshot } from "~/server/services/ai-metrics";
+import { aiPrompts, aiPromptVersions } from "~/server/db/schema";
 import { DEFAULT_PROMPTS, type PromptKey } from "~/server/services/prompt-defaults";
 
 const PROMPT_KEYS = ["persona_analysis", "rfp_analysis", "proposal_draft"] as const;
@@ -48,6 +49,24 @@ export const promptRouter = createTRPCRouter({
             };
         }),
 
+    listVersionsByKey: publicProcedure
+        .input(z.object({ key: z.enum(PROMPT_KEYS), limit: z.number().int().min(1).max(100).default(20) }))
+        .query(async ({ ctx, input }) => {
+            const prompt = await ctx.db.query.aiPrompts.findFirst({
+                where: eq(aiPrompts.key, input.key),
+            });
+
+            if (!prompt) {
+                return [];
+            }
+
+            return ctx.db.query.aiPromptVersions.findMany({
+                where: eq(aiPromptVersions.promptId, prompt.id),
+                orderBy: (table, helpers) => [helpers.desc(table.version)],
+                limit: input.limit,
+            });
+        }),
+
     upsert: publicProcedure
         .input(
             z.object({
@@ -57,6 +76,7 @@ export const promptRouter = createTRPCRouter({
                 systemInstruction: z.string().optional(),
                 promptTemplate: z.string().min(10),
                 isActive: z.boolean().default(true),
+                changeNotes: z.string().optional(),
             })
         )
         .mutation(async ({ ctx, input }) => {
@@ -78,6 +98,18 @@ export const promptRouter = createTRPCRouter({
                     .where(eq(aiPrompts.id, existing.id))
                     .returning();
 
+                if (!updated) {
+                    throw new Error("Failed to update AI prompt");
+                }
+
+                await recordPromptVersionSnapshot({
+                    promptId: updated.id,
+                    promptTemplate: updated.promptTemplate,
+                    systemInstruction: updated.systemInstruction,
+                    changeNotes: input.changeNotes ?? "Updated via prompt admin.",
+                    isActive: updated.isActive,
+                });
+
                 return updated;
             }
 
@@ -92,6 +124,18 @@ export const promptRouter = createTRPCRouter({
                     isActive: input.isActive,
                 })
                 .returning();
+
+            if (!inserted) {
+                throw new Error("Failed to create AI prompt");
+            }
+
+            await recordPromptVersionSnapshot({
+                promptId: inserted.id,
+                promptTemplate: inserted.promptTemplate,
+                systemInstruction: inserted.systemInstruction,
+                changeNotes: input.changeNotes ?? "Initial prompt version.",
+                isActive: inserted.isActive,
+            });
 
             return inserted;
         }),

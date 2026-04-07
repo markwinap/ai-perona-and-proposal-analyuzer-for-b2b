@@ -50,6 +50,13 @@
       "when": 1774379073955,
       "tag": "0007_flawless_omega_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775529600000,
+      "tag": "0008_add_ai_optimization_metrics",
+      "breakpoints": true
     }
   ]
 }
